@@ -1,20 +1,44 @@
 import numpy as np
-from typing import List
-'''
-Let's start with 1D ECAs. We'll also only use outer-totalistic rules. This only has 64 potential rules.
+from typing import List, Tuple
 
-For this, we have to generate mappings for each of 3 sums (0, 1, 2) based on state of interior.
-6 mappings we need to generate.
-'''
-def generateOTRulesECA(seed: int = 42) -> str:
+
+def generateRawOTRulesECA(numStates: int, seed: int = 42) -> List[str]:
+    assert 0 < numStates <= 64, "Only up to 64 distinct OT-ECA rules exist."
     rng = np.random.default_rng(seed = seed)
     
-    rule = rng.integers(0, 64) # doesn't include 64
-    binaryRule = bin(rule)
-    binaryRule = binaryRule[2:] # exclude 0b
-    while len(binaryRule) < 6:
-        binaryRule = "0" + binaryRule
-    return binaryRule
+    rules = set() # use set to avoid duplicates
+    
+    while len(rules) < numStates:
+        rule = rng.integers(0, 64) # doesn't include 64
+        binaryRule = bin(rule)
+        binaryRule = binaryRule[2:] # exclude 0b
+        while len(binaryRule) < 6:
+            binaryRule = "0" + binaryRule
+        rules.add(binaryRule)
+    
+    return sorted(list(rules)) # sorted for reproducibility between runs
+
+def generateStartStates(stateSize: int, numStates: int, seed: int = 42, density: float = 0.5) -> List[List[int]]:
+    rng = np.random.default_rng(seed = seed)
+    values = rng.random(stateSize * numStates)
+    states = []
+    for i in range(numStates):
+        newState = []
+        for j in range(stateSize):
+            idx = i*stateSize + j
+            if values[idx] > 1 - density:
+                newState.append(1)
+            else:
+                newState.append(0)
+        states.append(newState)
+    return states
+
+def generateProblems(stateSize: int, numStates: int, seed: int = 42, density: float = 0.5) -> List[Tuple[List[int], str]]:
+    states = generateStartStates(stateSize, numStates, seed = seed, density = density)
+    rules = generateRawOTRulesECA(numStates, seed = seed)
+    
+    return list(zip(states, rules))
+
 
 def simulate(state: List[int], rule: str, timesteps: int = 1) -> List[int]:
     currState = state[:]
@@ -41,19 +65,7 @@ def generatePrompt1D(state: List[int], rule: str, timesteps: int) -> str:
     
     return f"You are given the following initial state of a 1-Dimensional cellular automaton: {state}. Each cell can either be alive (1) or dead (0). All cells outside the boundary are considered dead.\nA cell's neighborhood consists of its two immediate neighbors: one to the left, and one to the right.\nThe automaton evolves according to the following rules:\nIf a cell is dead and its number of neighbors is in {deadToLiving}, it becomes living. Otherwise, the cell remains dead.\nIf a cell is alive and its number of neighbors is in {livingToDead}, it becomes dead. Otherwise, the cell remains living.\nWhat is the final state after {timesteps} timestep(s)?\nReturn the result as a binary string of equal length to the initial state without spaces or extra text of any kind."
 
-def scoreResponse(correct: str, response: str) -> float:
-    '''
-    
-    '''
-    if not correct:
-        return 0.0
-    
-    hammingDistance = sum(c != r for c, r in zip(correct ,response))
-    hammingDistance += abs(len(correct) - len(response)) # responses too long or too short have all excess/nonexistent characters counted as incorrect
-    
-    return 1 - (hammingDistance/max(len(correct), len(response))) # in [0, 1]
-
-rule = generateOTRulesECA(seed = 10)
+rule = generateRawOTRulesECA(seed = 10)
 print(rule)
 state = [1, 0, 0, 1, 1, 1, 0, 1, 0, 1]
 print(state)
