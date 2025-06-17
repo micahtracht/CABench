@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 import numpy as np
-from typing import List, Tuple
+from typing import List, Sequence, Tuple
 from rules import Rule1D
-
+from simulate import step_1d
 @dataclass
 class Problem1D:
     '''
@@ -22,6 +22,7 @@ class ECAProblemGenerator:
         self.density = density
         self.rng = np.random.default_rng(seed)
     
+    @staticmethod
     def num_rule_bits(num_states: int = 2, neighbor_count: int = 2) -> int:
         '''
         Number of bits needed to represent the ruleset, given the number of states and the number of neighbors:
@@ -51,56 +52,37 @@ class ECAProblemGenerator:
         rule = self._make_rule()
         return Problem1D(start_state=state, rule=rule, timesteps=timesteps)
     
-    def generate_batch(self, num_problems: int, timesteps: List[int]) -> List[Problem1D]:
+    def is_trivial(self, problem: Problem1D) -> bool:
+        start_state = problem.start_state
+        if all(x == 0 for x in start_state) or all(x == 1 for x in start_state): # prune all dead/all alive
+            return True
+        if step_1d(start_state, problem.rule) == start_state: # state doesn't ever change
+            return True
+        return False
+    
+    def generate_batch(self, num_problems: int, timesteps: Sequence[int] | int, trim_trivial: bool = True, max_attempts_factor: int = 10) -> List[Problem1D]:
         '''
         Makes a list of random Problem1D instances.
         '''
-        return [self.generate(timesteps[i]) for i in range(num_problems)]
+        if isinstance(timesteps, int):
+            timesteps = [timesteps] * num_problems
+        else:
+            if len(timesteps) < num_problems:
+                raise ValueError("Length of timesteps must equal the number of problems.")
         
+        problems = []
+        attempts, max_attempts = 0, max_attempts_factor * num_problems
+        while attempts < max_attempts and len(problems) < num_problems:
+            idx = len(problems)
+            trial_problem = self.generate(timesteps[idx])
+            if not trim_trivial or not self.is_trivial(trial_problem):
+                problems.append(trial_problem)
+            attempts += 1
+        if len(problems) < num_problems:
+            raise RuntimeError(f'Could only find {len(problems)} nontrivial problems in {max_attempts} attempts.')
+        return problems
 
-
-def generateRawRulesECA(numStates: int, seed: int = 42) -> List[str]:
-    assert 0 < numStates <= 64, "Only up to 64 distinct OT-ECA rules exist."
-    rng = np.random.default_rng(seed = seed)
-    
-    rules = set() # use set to avoid duplicates
-    
-    while len(rules) < numStates:
-        rule = rng.integers(0, 64) # doesn't include 64
-        binaryRule = bin(rule)
-        binaryRule = binaryRule[2:] # exclude 0b
-        while len(binaryRule) < 6:
-            binaryRule = "0" + binaryRule
-        rules.add(binaryRule)
-    
-    return sorted(list(rules)) # sorted for reproducibility between runs
-
-def generateStartStates(stateSize: int, numStates: int, seed: int = 42, density: float = 0.5) -> List[List[int]]:
-    rng = np.random.default_rng(seed = seed)
-    values = rng.random(stateSize * numStates)
-    states = []
-    for i in range(numStates):
-        newState = []
-        for j in range(stateSize):
-            idx = i*stateSize + j
-            if values[idx] > 1 - density:
-                newState.append(1)
-            else:
-                newState.append(0)
-        states.append(newState)
-    return states
-
-def generateProblems(stateSize: int, numStates: int, seed: int = 42, density: float = 0.5) -> List[Tuple[List[int], str]]:
-    states = generateStartStates(stateSize, numStates, seed = seed, density = density)
-    rules = generateRawOTRulesECA(numStates, seed = seed)
-    
-    return list(zip(states, rules))
-
-
-def generatePrompt1D(state: List[int], rule: str, timesteps: int) -> str:
-    deadToLiving = [i for i in range(len(rule)) if i < 3 and int(rule[i]) == 1]
-    livingToDead = [i-3 for i in range(len(rule)) if i >= 3 and int(rule[i]) == 0]
-    
-    return f"You are given the following initial state of a 1-Dimensional cellular automaton: {state}. Each cell can either be alive (1) or dead (0). All cells outside the boundary are considered dead.\nA cell's neighborhood consists of its two immediate neighbors: one to the left, and one to the right.\nThe automaton evolves according to the following rules:\nIf a cell is dead and its number of neighbors is in {deadToLiving}, it becomes living. Otherwise, the cell remains dead.\nIf a cell is alive and its number of neighbors is in {livingToDead}, it becomes dead. Otherwise, the cell remains living.\nWhat is the final state after {timesteps} timestep(s)?\nReturn the result as a binary string of equal length to the initial state without spaces or extra text of any kind."
-
-
+gen = ECAProblemGenerator(state_size=20, seed=0, density=0.5)
+batch = gen.generate_batch(100, timesteps=4)  # prunes by default
+assert not any(gen.is_trivial(p) for p in batch)
+print("Generated", len(batch), "non-trivial problems ✔")

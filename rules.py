@@ -1,11 +1,11 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Protocol
-from __future__ import annotations
+
 
 class Rule(Protocol):
     num_states: int
     rule: str # May change later - think about how to encode multi-state rules. For now, work with 1D ECAs, so use a 6 bit string.
-    assert len(rule) == 6, "For 1 dimension, rules must have 6 bits."
 
     def __call__(self, self_state: int, timesteps: int) -> int:
         ...
