@@ -1,9 +1,10 @@
 import json, pathlib, tempfile
 from eval import normalized_hamming_accuracy, main as eval_cli
+import pytest
 
 def test_metric_exact():
     assert normalized_hamming_accuracy("1010", "1010") == 1.0
-    assert normalized_hamming_accuracy("1010", "0000") == 0.25
+    assert normalized_hamming_accuracy("1010", "0000") == 0.5
     assert normalized_hamming_accuracy("0101", "1010") == 0.0
     assert normalized_hamming_accuracy("0000", "1010") == 0.5
     assert normalized_hamming_accuracy("", "1001") == 0.0
@@ -19,4 +20,6 @@ def test_eval_cli_gold_equals_pred(tmp_path, monkeypatch):
     preds.write_text("\n".join(d["target"] for d in data))
     
     # run eval CLI, expect exit 0
-    eval_cli(["--gold", str(gold), "--pred", str(preds)])
+    with pytest.raises(SystemExit) as exc:
+        eval_cli(["--gold", str(gold), "--pred", str(preds)])
+    assert exc.value.code == 0
