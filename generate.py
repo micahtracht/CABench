@@ -81,8 +81,22 @@ class ECAProblemGenerator:
         if len(problems) < num_problems:
             raise RuntimeError(f'Could only find {len(problems)} nontrivial problems in {max_attempts} attempts.')
         return problems
+    
+    def generate_prompt_1D(self, problem: Problem1D, timesteps: int = 1) -> str:
+        rule = problem.rule.rule # this naming is awful, fix it
+        deadToLiving = [i for i in range(len(rule)) if i < 3 and int(rule[i]) == 1]
+        livingToDead = [i-3 for i in range(len(rule)) if i >= 3 and int(rule[i]) == 0]
+        
+        return f"You are given the following initial state of a 1-Dimensional cellular automaton: {problem.start_state}. Each cell can either be alive (1) or dead (0). All cells outside the boundary are considered dead.\nA cell's neighborhood consists of its two immediate neighbors: one to the left, and one to the right.\nThe automaton evolves according to the following rules:\nIf a cell is dead and its number of neighbors is in {deadToLiving}, it becomes living. Otherwise, the cell remains dead.\nIf a cell is alive and its number of neighbors is in {livingToDead}, it becomes dead. Otherwise, the cell remains living.\nWhat is the final state after {timesteps} timestep(s)?\nReturn the result as a binary string of equal length to the initial state without spaces or extra text of any kind."
+    def generate_prompt_1d_batch(self, problem_list: List[Problem1D], timesteps: int | Sequence[int]) -> List[str]:
+        if isinstance(timesteps, int):
+            timestep_list = [timesteps] * len(problem_list)
+        else:
+            if len(timesteps) < len(problem_list):
+                raise ValueError("Length of timesteps must equal the number of problems.")
+        return [self.generate_prompt_1D(problem_list[i], timestep_list[i]) for i in range(len(problem_list))]
 
-gen = ECAProblemGenerator(state_size=20, seed=0, density=0.5)
-batch = gen.generate_batch(100, timesteps=4)  # prunes by default
-assert not any(gen.is_trivial(p) for p in batch)
-print("Generated", len(batch), "non-trivial problems ✔")
+gen = ECAProblemGenerator(10, 42, 0.5)
+problems = gen.generate_batch(2, 1, True, 10)
+prompts = gen.generate_prompt_1d_batch(problems, 1)
+print(prompts[0])
