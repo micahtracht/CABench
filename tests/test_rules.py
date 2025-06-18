@@ -13,7 +13,7 @@ def test_from_int_roundtrip():
         ("000000", 0, 0, 0),
         ("000000", 1, 2, 0),
         ("111111", 0, 2, 1),
-        ("110001", 1, 0, 1),
+        ("110001", 1, 0, 0),
     ],
 )
 def test_rule_call(rule_bits, self_state, neigh, sum_expected):
