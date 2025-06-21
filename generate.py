@@ -95,8 +95,3 @@ class ECAProblemGenerator:
             if len(timesteps) < len(problem_list):
                 raise ValueError("Length of timesteps must equal the number of problems.")
         return [self.generate_prompt_1D(problem_list[i], timestep_list[i]) for i in range(len(problem_list))]
-
-gen = ECAProblemGenerator(10, 42, 0.5)
-problems = gen.generate_batch(2, 1, True, 10)
-prompts = gen.generate_prompt_1d_batch(problems, 1)
-print(prompts[0])

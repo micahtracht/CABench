@@ -172,7 +172,7 @@ def run(cfg_path: pathlib.Path) -> None:
                 )
 
 
-# --------------------------------------------------------------------------- #
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Run CA-Bench orchestrator.")
     ap.add_argument(
