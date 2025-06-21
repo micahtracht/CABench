@@ -1,0 +1,17 @@
+# bench.yaml
+# CA-Bench configuration: which datasets and which models to evaluate
+
+datasets:
+  # A small public sanity set generated earlier
+  - name: val_public
+    path: data/val_public.jsonl
+    timesteps: 1
+
+models:
+  # Replace with the exact model string from the provider’s docs
+  - id: gpt-4.1-nano
+    provider: openai
+    max_calls_per_min: 15      # orchestrator will throttle to this
+    price_per_1k_tokens: 0.0004 # USD estimate for cost projection
+    temperature: 0             # keep baseline deterministic
+

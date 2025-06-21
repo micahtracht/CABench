@@ -1,5 +1,5 @@
 import json, subprocess, tempfile, pathlib, os
-from generate_dataset import main as gen_cli
+from CABenchRoot.generate_dataset import main as gen_cli
 
 def test_cli_generates_jsonl(tmp_path):
     outfile = tmp_path / "demo.jsonl"
