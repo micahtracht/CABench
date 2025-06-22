@@ -87,7 +87,19 @@ class ECAProblemGenerator:
         deadToLiving = [i for i in range(len(rule)) if i < 3 and int(rule[i]) == 1]
         livingToDead = [i-3 for i in range(len(rule)) if i >= 3 and int(rule[i]) == 0]
         
-        return f"You are given the following initial state of a 1-Dimensional cellular automaton: {problem.start_state}. Each cell can either be alive (1) or dead (0). All cells outside the boundary are considered dead.\nA cell's neighborhood consists of its two immediate neighbors: one to the left, and one to the right.\nThe automaton evolves according to the following rules:\nIf a cell is dead and its number of neighbors is in {deadToLiving}, it becomes living. Otherwise, the cell remains dead.\nIf a cell is alive and its number of neighbors is in {livingToDead}, it becomes dead. Otherwise, the cell remains living.\nWhat is the final state after {timesteps} timestep(s)?\nReturn the result as a binary string of equal length to the initial state without spaces or extra text of any kind."
+        return (
+        f"You are given the following initial state of a 1-Dimensional cellular automaton:\n"
+        f"{problem.start_state}\n\n"
+        "Each cell can be alive (1) or dead (0). Cells outside the boundary are dead.\n"
+        "A cell’s neighborhood is its immediate left and right neighbors.\n\n"
+        "Transition rules:\n"
+        f"-Dead to alive if neighbor count is in {deadToLiving}; else the cell stays dead.\n"
+        f"-Alive to dead if neighbor count is in {livingToDead}; else the cell stays alive.\n\n"
+        f"After {timesteps} timestep(s), what is the final state?\n\n"
+        "Return your answer as valid JSON, for example:\n"
+        "`{\"answer\": [0,1,0,1,…]}`\n"
+        "Do **not** include any extra text or explanation."
+    )
     def generate_prompt_1d_batch(self, problem_list: List[Problem1D], timesteps: int | Sequence[int]) -> List[str]:
         if isinstance(timesteps, int):
             timestep_list = [timesteps] * len(problem_list)

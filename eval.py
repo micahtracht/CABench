@@ -24,22 +24,34 @@ def evaluate(gold_path: pathlib.Path, pred_path: pathlib.Path) -> None:
     
     if len(gold_lines) != len(pred_lines):
         print(f'Mismatch: there are {len(pred_lines)} predictions but {len(gold_lines)} gold cases.',
-              file=sys.stderr,
+            file=sys.stderr,
         )
         sys.exit(1)
     
     total = len(gold_lines)
     sum_acc = 0.0
     exact_match_count = 0
+    invalid_preds = 0
     
     for idx, (gline, pred) in enumerate(zip(gold_lines, pred_lines), start=1):
         data = json.loads(gline)
         correct = data['target']
-        acc = normalized_hamming_accuracy(correct, pred)
+
+        # Validate that the prediction is a binary string
+        if not all(c in '01' for c in pred):
+            print(f"Warning: Invalid character(s) in prediction on line {idx}. Treating as incorrect.", file=sys.stderr)
+            acc = 0.0
+            invalid_preds += 1
+        else:
+            acc = normalized_hamming_accuracy(correct, pred)
+
         sum_acc += acc
         
         if pred == correct:
             exact_match_count += 1
+            
+    if invalid_preds > 0:
+        print(f"-Found {invalid_preds} predictions with invalid characters.", file=sys.stderr)
         
     average_acc = sum_acc / total
     exact_match_percent = exact_match_count / total

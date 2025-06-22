@@ -57,7 +57,7 @@ def main() -> None:
     done = 0
     if args.output.exists():
         done = sum(1 for _ in args.output.open())
-        print(f"↻  Resuming — {done} predictions already exist")
+        print(f"Resuming — {done} predictions already exist")
 
     out_jsonl = args.output.open("a", encoding="utf-8")
     usage_csv = args.usage.open("a", newline="")
@@ -93,7 +93,7 @@ def main() -> None:
             usd = usage["total"] / 1000 * PRICE_PER_1K
             running_cost += usd
             if running_cost > HARD_CAP:
-                sys.exit(f"🛑 cost {running_cost:.2f} > hard cap ${HARD_CAP}")
+                sys.exit(f"cost {running_cost:.2f} > hard cap ${HARD_CAP}")
 
             out_jsonl.write(json.dumps(data, separators=(",", ":")) + "\n")
             writer.writerow(
