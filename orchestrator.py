@@ -119,7 +119,7 @@ def run(cfg_path: Path, dry_run: bool = False) -> None:
                 # 2) convert structured JSONL -> plain-text preds
                 preds_txt = DATA_DIR / f"{model_id}_{ds['name']}.preds"
                 shell([
-                    sys.executable, "convert_preds.py",
+                    sys.executable, "convert_predictions.py",
                     "--input",  str(jsonl_preds),
                     "--output", str(preds_txt),
                 ])
