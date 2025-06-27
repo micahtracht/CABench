@@ -13,8 +13,20 @@ python convert_predictions.py \
 """
 
 from __future__ import annotations
-import argparse, json, pathlib, sys
+import argparse, json, pathlib, sys, re
 
+
+def extract_json_from_string(s: str) -> dict | None:
+    """
+    Finds and parses the first valid JSON object from a string.
+    """
+    match = re.search(r'\{.*\}', s, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+    return None
 
 def json_to_bits(obj: dict) -> str:
     """
@@ -47,7 +59,11 @@ def convert_file(in_path: pathlib.Path, out_path: pathlib.Path) -> None:
             if not line:
                 continue
             try:
-                obj = json.loads(line)
+                # Use the new function to extract the JSON object
+                obj = extract_json_from_string(line)
+                if obj is None:
+                    raise ValueError("No JSON object found in line")
+                
                 bits = json_to_bits(obj)
                 fout.write(bits + "\n")
                 n_ok += 1
@@ -60,7 +76,7 @@ def convert_file(in_path: pathlib.Path, out_path: pathlib.Path) -> None:
 
     print(f"wrote {n_ok} predictions. {n_bad} lines had errors → blank")
 
-
+ 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", type=pathlib.Path, required=True, help="JSONL file")

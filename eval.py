@@ -57,7 +57,7 @@ def evaluate(gold_path: pathlib.Path, pred_path: pathlib.Path) -> None:
     exact_match_percent = exact_match_count / total
     print(f"-Evaluated {total} cases")
     print(f"-Normalized Hamming accuracy: {average_acc:.4f}")
-    print(f"-Exact-match accuracy: {exact_match_percent}/{total} = {exact_match_percent * 100:.2f}%")
+    print(f"-Exact-match accuracy: {exact_match_count}/{total} = {exact_match_percent * 100:.2f}%")
     sys.exit(0)
 
 def build_parser() -> argparse.ArgumentParser:

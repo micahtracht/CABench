@@ -12,9 +12,11 @@ from typing import Dict, List
 
 from openai import OpenAI, RateLimitError, APIError
 import backoff
+import re
 
 from generate import ECAProblemGenerator, Problem1D
 from rules import Rule1D
+
 
 # constants & client
 PRICE_PER_1K = 0.003
@@ -27,6 +29,18 @@ if client.api_key is None:
 #generator instance just for its prompt-builder method
 gen = ECAProblemGenerator(state_size=0) # size unused for prompt building
 
+def extract_json_from_string(s: str) -> dict | None:
+    """
+    Finds and parses the first valid JSON object from a string.
+    """
+    match = re.search(r'\{.*\}', s, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
+    return None
+
 @backoff.on_exception(backoff.expo, (RateLimitError, APIError), max_time=60)
 def chat_json(model: str, prompt: str, temperature: float = 0.0):
     """One JSON-mode call → (python_dict, token_usage)."""
@@ -36,7 +50,16 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
         response_format={"type": "json_object"},     # JSON mode
         temperature=temperature,
     )
-    return json.loads(resp.choices[0].message.content), {
+    
+    # Extract JSON from the potentially messy response string
+    json_output = extract_json_from_string(resp.choices[0].message.content)
+
+    if json_output is None:
+        # You can decide how to handle cases where no JSON is found.
+        # For now, we'll raise an error.
+        raise ValueError("No valid JSON object found in the model's response.")
+
+    return json_output, {
         "prompt": resp.usage.prompt_tokens,
         "completion": resp.usage.completion_tokens,
         "total": resp.usage.total_tokens,
