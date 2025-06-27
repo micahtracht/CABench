@@ -133,7 +133,7 @@ def main() -> None:
             time.sleep(60 / args.tpm)
 
     print(
-        f"✅ Finished {idx-done} calls; total spent ≈ ${running_cost:.2f}. "
+        f"Finished {idx-done} calls; total spent ≈ ${running_cost:.2f}. "
         f"Preds → {args.output}"
     )
 
