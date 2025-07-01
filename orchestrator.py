@@ -100,12 +100,22 @@ def run(cfg_path: Path, dry_run: bool = False) -> None:
                     est_usd = 0.0
                     print(f"Model {model_id}: dry run — skipping API calls")
 
+                # pick the correct runner for this dataset's dimensionality
+                dim = ds.get("dim", 1)
+                if dim == 1:
+                    runner_mod = "wrappers.run_llm_json"
+                elif dim == 2:
+                    runner_mod = "wrappers.run_llm_json_2d"
+                else:
+                    print(f"Unsupported dimension {dim} in dataset '{ds['name']}'", file=sys.stderr)
+                    continue
+
                 # 1) call LLM for structured JSONL predictions
                 jsonl_preds = DATA_DIR / f"{model_id}_{ds['name']}.jsonl"
                 usage_csv   = LOG_DIR   / f"{model_id}_{ds['name']}_usage.csv"
 
                 cmd = [
-                    sys.executable, "-m", "wrappers.run_llm_json",
+                    sys.executable, "-m", runner_mod,
                     "--model", model_id,
                     "--input", str(gold_path),
                     "--output", str(jsonl_preds),
@@ -127,7 +137,8 @@ def run(cfg_path: Path, dry_run: bool = False) -> None:
                 # 3) evaluate
                 eval_proc = subprocess.run(
                     [
-                        sys.executable, "eval.py",
+                        sys.executable,
+                        "eval.py",
                         "--gold", str(gold_path),
                         "--pred", str(preds_txt),
                     ],

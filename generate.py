@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 import numpy as np
 from typing import List, Sequence, Tuple
-from rules import Rule1D, Rule2D
-from simulate import step_1d, step_2d
+from rules import Rule1D
+from simulate import step_1d
 @dataclass
 class Problem1D:
     '''
@@ -82,24 +82,25 @@ class ECAProblemGenerator:
             raise RuntimeError(f'Could only find {len(problems)} nontrivial problems in {max_attempts} attempts.')
         return problems
     
-    def generate_prompt_1D(self, problem: Problem1D, timesteps: int = 1) -> str:
-        rule = problem.rule.rule # this naming is awful, fix it
-        deadToLiving = [i for i in range(len(rule)) if i < 3 and int(rule[i]) == 1]
-        livingToDead = [i-3 for i in range(len(rule)) if i >= 3 and int(rule[i]) == 0]
+    def generate_prompt_1D(self, problem: Problem1D) -> str:
+        rule_bits = problem.rule.rule # this naming is awful, fix it
+        dead_to_live = [i for i in range(len(rule_bits)) if i < 3 and int(rule_bits[i]) == 1]
+        live_to_die = [i-3 for i in range(len(rule_bits)) if i >= 3 and int(rule_bits[i]) == 0]
+        
+        state_string = ",".join(map(str, problem.start_state))
         
         return (
-        f"You are given the following initial state of a 1-Dimensional cellular automaton:\n"
-        f"{problem.start_state}\n\n"
-        "Each cell can be alive (1) or dead (0). Cells outside the boundary are dead.\n"
-        "A cells neighborhood is its immediate left and right neighbors.\n\n"
+        "You are given the following initial state of a 1-dimensional cellular automaton:\n"
+        f"{state_string}\n\n"
+        "Each cell is either alive (1) or dead (0). Cells outside the boundary are dead.\n"
+        "A cell’s neighborhood consists of  its two immediate neighbors (left and right).\n\n"
         "Transition rules:\n"
-        f"-Dead to alive if neighbor count is in {deadToLiving}; else the cell stays dead.\n"
-        f"-Alive to dead if neighbor count is in {livingToDead}; else the cell stays alive.\n\n"
-        f"After {timesteps} timestep(s), what is the final state?\n\n"
-        "Return your answer as valid JSON, for example:\n"
-        "`{\"answer\": [0,1,0,1,…]}`\n"
-        "Do **not** include any extra text or explanation."
+        f"-Dead → alive if neighbour count ∈ {dead_to_live}; otherwise stays dead.\n"
+        f"-Alive → dead if neighbour count ∈ {live_to_die}; otherwise stays alive.\n\n"
+        f"After {problem.timesteps} timestep(s), what is the final state?\n"
+        "Return the result as a comma-separated list of 0s and 1s, with no spaces or extra text."
     )
+    
     def generate_prompt_1d_batch(self, problem_list: List[Problem1D], timesteps: int | Sequence[int]) -> List[str]:
         if isinstance(timesteps, int):
             timestep_list = [timesteps] * len(problem_list)
@@ -108,91 +109,7 @@ class ECAProblemGenerator:
                 raise ValueError("Length of timesteps must equal the number of problems.")
         return [self.generate_prompt_1D(problem_list[i], timestep_list[i]) for i in range(len(problem_list))]
 
-@dataclass
-class Problem2D:
-    '''
-    A single 2-D outer-totalistic CA problem: start grid, rule, and timesteps.
-    The start_state is a list of rows, each a list of 0/1 integers.
-    '''
-    start_state: List[List[int]]
-    rule: Rule2D
-    timesteps: int = 1
-
-
-class ECA2DGenerator:
-    '''
-    Generator for 2-D outer-totalistic binary cellular automata (Moore neighborhood).
-    '''
-    def __init__(self, width: int, height: int, seed: int = 42, density: float = 0.5):
-        self.width = width
-        self.height = height
-        self.density = density
-        self.rng = np.random.default_rng(seed)
-
-    @staticmethod
-    def num_rule_bits(num_states: int = 2, neighbor_count: int = 8) -> int:
-        return num_states * (neighbor_count + 1)
-
-    def _make_rule(self) -> Rule2D:
-        needed_bits = self.num_rule_bits()
-        integer_code = int(self.rng.integers(0, 2**needed_bits))
-        return Rule2D.from_int(integer_code)
-
-    def _make_state(self) -> List[List[int]]:
-        values = self.rng.random((self.height, self.width))
-        return [[int(v < self.density) for v in row] for row in values]
-
-    def generate(self, timesteps: int = 1) -> Problem2D:
-        state = self._make_state()
-        rule = self._make_rule()
-        return Problem2D(start_state=state, rule=rule, timesteps=timesteps)
-
-    def is_trivial(self, problem: Problem2D) -> bool:
-        grid = problem.start_state
-        flat = [cell for row in grid for cell in row]
-        if all(x == 0 for x in flat) or all(x == 1 for x in flat):
-            return True
-        if step_2d(grid, problem.rule) == grid:
-            return True
-        return False
-
-    def generate_batch(self, num_problems: int, timesteps: Sequence[int] | int, trim_trivial: bool = True, max_attempts_factor: int = 10) -> List[Problem2D]:
-        if isinstance(timesteps, int):
-            timestep_list = [timesteps] * num_problems
-        else:
-            if len(timesteps) < num_problems:
-                raise ValueError("Length of timesteps must equal the number of problems.")
-            timestep_list = list(timesteps)
-
-        problems: List[Problem2D] = []
-        attempts, max_attempts = 0, max_attempts_factor * num_problems
-        while attempts < max_attempts and len(problems) < num_problems:
-            trial_problem = self.generate(timestep_list[len(problems)])
-            if not trim_trivial or not self.is_trivial(trial_problem):
-                problems.append(trial_problem)
-            attempts += 1
-        if len(problems) < num_problems:
-            raise RuntimeError(f'Could only find {len(problems)} non-trivial problems in {max_attempts} attempts.')
-        return problems
-
-    def generate_prompt_2D(self, problem: Problem2D, timesteps: int = 1) -> str:
-        rule_bits = problem.rule.rule_bits
-        birth_sums = [i for i in range(9) if rule_bits[i] == "1"]
-        survive_sums = [i for i in range(9) if rule_bits[9 + i] == "1"]
-
-        grid_rows = ["[" + ",".join(map(str, row)) + "]" for row in problem.start_state]
-        grid_str = "[\n" + ",\n".join(grid_rows) + "\n]"
-
-        return (
-            f"You are given the following initial state of a 2-Dimensional cellular automaton grid:\n"
-            f"{grid_str}\n\n"
-            "Each cell is either alive (1) or dead (0). Cells outside the grid are dead.\n"
-            "A cells neighborhood is the Moore neighborhood (the eight surrounding cells).\n\n"
-            "Transition rules (outer-totalistic):\n"
-            f"- Dead → alive if neighbor count ∈ {birth_sums}; otherwise the cell stays dead.\n"
-            f"- Alive → stays alive if neighbor count ∈ {survive_sums}; otherwise the cell becomes dead.\n\n"
-            f"After {timesteps} timestep(s), what is the final grid state?\n\n"
-            "Return your answer as valid JSON, for example:\n"
-            '{"answer": [[0,1,0],[1,0,1],[0,1,0]]}\n'
-            "Do not include any extra text or explanation."
-        )
+gen = ECAProblemGenerator(10, 42, 0.5)
+problems = gen.generate_batch(2, 1, True, 10)
+prompts = gen.generate_prompt_1d_batch(problems, 1)
+print(prompts[0])
