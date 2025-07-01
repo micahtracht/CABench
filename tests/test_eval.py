@@ -1,5 +1,5 @@
 import json, pathlib, tempfile
-from eval import normalized_hamming_accuracy, main as eval_cli
+from eval import _flatten, normalized_hamming_accuracy, main as eval_cli
 import pytest
 
 def test_metric_exact():
@@ -23,3 +23,26 @@ def test_eval_cli_gold_equals_pred(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         eval_cli(["--gold", str(gold), "--pred", str(preds)])
     assert exc.value.code == 0
+
+def test_flatten_nested_list():
+    nested = [[1, 0], [0, 1]]
+    assert _flatten(nested) == "1001"
+
+
+def test_flatten_invalid_symbol():
+    nested_bad = [[1, 2], [0]]
+    with pytest.raises(ValueError):
+        _flatten(nested_bad)
+
+
+def test_eval_cli_length_mismatch(tmp_path):
+    gold = tmp_path / "gold.jsonl"
+    preds = tmp_path / "preds.txt"
+
+    # two gold lines, one prediction line
+    gold.write_text("\n".join(json.dumps({"target": "0"}) for _ in range(2)))
+    preds.write_text("0\n")
+
+    with pytest.raises(SystemExit) as exc:
+        eval_cli(["--gold", str(gold), "--pred", str(preds)])
+    assert exc.value.code == 1
