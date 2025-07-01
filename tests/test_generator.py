@@ -59,7 +59,7 @@ def test_generate_prompt_contains_start_and_json():
     # prompt must include the exact start_state string and the JSON sentinel
     assert str(prob.start_state) in prompt
     assert '{"answer": [' in prompt
-    assert prompt.strip().endswith("]}")
+    assert prompt.strip().endswith("explanation.")
 
 
 def test_generate_prompt_batch_length():
