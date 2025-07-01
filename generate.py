@@ -82,24 +82,25 @@ class ECAProblemGenerator:
             raise RuntimeError(f'Could only find {len(problems)} nontrivial problems in {max_attempts} attempts.')
         return problems
     
-    def generate_prompt_1D(self, problem: Problem1D) -> str:
-        rule_bits = problem.rule.rule # this naming is awful, fix it
-        dead_to_live = [i for i in range(len(rule_bits)) if i < 3 and int(rule_bits[i]) == 1]
-        live_to_die = [i-3 for i in range(len(rule_bits)) if i >= 3 and int(rule_bits[i]) == 0]
-        
-        state_string = ",".join(map(str, problem.start_state))
-        
+    def generate_prompt_1D(self, problem: Problem1D, timesteps: int = 1) -> str:
+        rule_bits = problem.rule.rule
+        dead_to_living = [i for i in range(3) if rule_bits[i] == "1"]
+        living_to_dead = [i - 3 for i in range(3, 6) if rule_bits[i] == "0"]
+
         return (
-        "You are given the following initial state of a 1-dimensional cellular automaton:\n"
-        f"{state_string}\n\n"
-        "Each cell is either alive (1) or dead (0). Cells outside the boundary are dead.\n"
-        "A cell’s neighborhood consists of  its two immediate neighbors (left and right).\n\n"
-        "Transition rules:\n"
-        f"-Dead → alive if neighbour count ∈ {dead_to_live}; otherwise stays dead.\n"
-        f"-Alive → dead if neighbour count ∈ {live_to_die}; otherwise stays alive.\n\n"
-        f"After {problem.timesteps} timestep(s), what is the final state?\n"
-        "Return the result as a comma-separated list of 0s and 1s, with no spaces or extra text."
-    )
+            f"You are given the following initial state of a 1-Dimensional cellular automaton:\n"
+            f"{problem.start_state}\n\n"
+            "Each cell can be alive (1) or dead (0). Cells outside the boundary are dead.\n"
+            "A cell’s neighborhood is its immediate left and right neighbors.\n\n"
+            "Transition rules:\n"
+            f"- Dead → alive if neighbor count ∈ {dead_to_living}; otherwise the cell stays dead.\n"
+            f"- Alive → dead if neighbor count ∈ {living_to_dead}; otherwise the cell stays alive.\n\n"
+            f"After {timesteps} timestep(s), what is the final state?\n\n"
+            "You may write your reasoning first.\n"
+            'Then, on the very last line of your reply, output only a valid JSON object such as:\n'
+            '{"answer": [0,1,0,1]}\n'
+            "Do not include any extra text or explanation."
+        )
     
     def generate_prompt_1d_batch(self, problem_list: List[Problem1D], timesteps: int | Sequence[int]) -> List[str]:
         if isinstance(timesteps, int):
