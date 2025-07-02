@@ -109,6 +109,45 @@ class CAProblemGenerator2D:
             )
 
         return problems
+    
+    
+    def generate_prompt_2D(self, problem: Problem2D, timesteps: int = 1) -> str:
+        """
+        Return a text prompt instructing an LLM to predict the final grid state.
+        Format and wording deliberately parallel the 1-D prompt builder.
+        """
+        rule_bits = problem.rule.rule_bits  # length 18, indices 0-8 (dead), 9-17 (alive)
+        dead_to_live   = [i for i in range(9) if rule_bits[i] == "1"]
+        alive_to_dead  = [i for i in range(9) if rule_bits[9 + i] == "0"]
+
+        return (
+            "You are given the following initial state of a 2-Dimensional cellular automaton:\n"
+            f"{problem.start_grid}\n\n"
+            "Each cell can be alive (1) or dead (0). Cells outside the boundary are dead.\n"
+            "A cell's neighborhood is its eight surrounding cells (Moore neighborhood).\n\n"
+            "Transition rules:\n"
+            f"- Dead -> alive if neighbor count is in {dead_to_live}; otherwise the cell stays dead.\n"
+            f"- Alive -> dead if neighbor count is in {alive_to_dead}; otherwise the cell stays alive.\n\n"
+            f"After {timesteps} timestep(s), what is the final state?\n\n"
+            "You may write your reasoning first.\n"
+            "Then, on the very last line of your reply, output only a valid JSON object such as:\n"
+            '{"answer": [[0,1,0],[1,0,1]]}\n'
+            "Do not include any extra text or explanation."
+        )
+
+
+    def generate_prompt_2d_batch(self, problems: Sequence[Problem2D], timesteps: int | Sequence[int] = 1) -> List[str]:
+        """
+        Vectorised helper analogous to generate_prompt_1d_batch.
+        """
+        if isinstance(timesteps, int):
+            t_list = [timesteps] * len(problems)
+        else:
+            if len(timesteps) < len(problems):
+                raise ValueError("Length of timesteps must equal the number of problems.")
+            t_list = list(timesteps)
+
+        return [self.generate_prompt_2D(prob, t_list[idx]) for idx, prob in enumerate(problems)]
 
 class ECAProblemGenerator:
     '''
