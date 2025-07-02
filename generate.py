@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 import numpy as np
 from typing import List, Sequence, Tuple
-from rules import Rule1D
-from simulate import step_1d
+from rules import Rule1D, Rule2D
+from simulate import step_1d, step_2d
 @dataclass
 class Problem1D:
     '''
@@ -12,6 +12,103 @@ class Problem1D:
     rule: Rule1D
     timesteps: int = 1
 
+@dataclass
+class Problem2D:
+    start_grid: List[List[int]]
+    rule: Rule2D
+    timesteps: int = 1
+
+class CAProblemGenerator2D:
+    """
+    Random 2-D outer-totalistic binary CA task generator.
+    Grid cells outside the H×W rectangle are treated as 0 (dead).
+    """
+    def __init__(self, height: int, width: int, *, seed: int = 42, density: float = 0.5):
+        self.h = height
+        self.w = width
+        self.density = density
+        self.rng = np.random.default_rng(seed)
+
+    @staticmethod
+    def num_rule_bits(num_states: int = 2, neighbor_count: int = 8) -> int:
+        """
+        Number of bits needed to represent the ruleset (outer-totalistic binary):
+        num_states * (neighbor_count + 1).
+        """
+        return num_states * (neighbor_count + 1)
+
+    def _make_rule(self) -> Rule2D:
+        """
+        Generate a random 2-D outer-totalistic binary rule by sampling an integer
+        and converting to an 18-bit string.
+        """
+        bit_len = self.num_rule_bits()
+        code = int(self.rng.integers(0, 2**bit_len))
+        return Rule2D.from_int(code)
+
+    def _make_grid(self) -> List[List[int]]:
+        """
+        Generate a random H×W binary grid with the given density.
+        """
+        return [
+            [int(self.rng.random() < self.density) for _ in range(self.w)]
+            for _ in range(self.h)
+        ]
+
+    def generate(self, timesteps: int = 1) -> Problem2D:
+        """
+        Create a single 2-D CA problem with a random start grid and rule.
+        """
+        grid = self._make_grid()
+        rule = self._make_rule()
+        return Problem2D(start_grid=grid, rule=rule, timesteps=timesteps)
+
+    def is_trivial(self, problem: Problem2D) -> bool:
+        """
+        Return True if the problem is trivial: all cells dead, all alive, or
+        if one step leaves the grid unchanged.
+        """
+        flat = [cell for row in problem.start_grid for cell in row]
+        if all(x == 0 for x in flat) or all(x == 1 for x in flat):
+            return True
+        return step_2d(problem.start_grid, problem.rule) == problem.start_grid
+
+    def generate_batch(
+        self,
+        num_problems: int,
+        timesteps: Sequence[int] | int,
+        trim_trivial: bool = True,
+        max_attempts_factor: int = 10,
+    ) -> List[Problem2D]:
+        """
+        Generate a batch of non-trivial 2-D CA problems.
+        If trim_trivial is True, filters out trivial problems.
+        """
+        if isinstance(timesteps, int):
+            timesteps_list = [timesteps] * num_problems
+        else:
+            if len(timesteps) < num_problems:
+                raise ValueError("Length of timesteps must equal number of problems.")
+            timesteps_list = list(timesteps)
+
+        problems: List[Problem2D] = []
+        attempts = 0
+        max_attempts = max_attempts_factor * num_problems
+
+        while attempts < max_attempts and len(problems) < num_problems:
+            idx = len(problems)
+            prob = self.generate(timesteps_list[idx])
+            if not trim_trivial or not self.is_trivial(prob):
+                problems.append(prob)
+            attempts += 1
+
+        if len(problems) < num_problems:
+            raise RuntimeError(
+                f"Could only create {len(problems)}/{num_problems} nontrivial problems "
+                f"in {max_attempts} attempts."
+            )
+
+        return problems
 
 class ECAProblemGenerator:
     '''
@@ -91,7 +188,7 @@ class ECAProblemGenerator:
             f"You are given the following initial state of a 1-Dimensional cellular automaton:\n"
             f"{problem.start_state}\n\n"
             "Each cell can be alive (1) or dead (0). Cells outside the boundary are dead.\n"
-            "A cell’s neighborhood is its immediate left and right neighbors.\n\n"
+            "A cell's neighborhood is its immediate left and right neighbors.\n\n"
             "Transition rules:\n"
             f"- Dead → alive if neighbor count ∈ {dead_to_living}; otherwise the cell stays dead.\n"
             f"- Alive → dead if neighbor count ∈ {living_to_dead}; otherwise the cell stays alive.\n\n"
@@ -109,8 +206,3 @@ class ECAProblemGenerator:
             if len(timesteps) < len(problem_list):
                 raise ValueError("Length of timesteps must equal the number of problems.")
         return [self.generate_prompt_1D(problem_list[i], timestep_list[i]) for i in range(len(problem_list))]
-
-gen = ECAProblemGenerator(10, 42, 0.5)
-problems = gen.generate_batch(2, 1, True, 10)
-prompts = gen.generate_prompt_1d_batch(problems, 1)
-print(prompts[0])
