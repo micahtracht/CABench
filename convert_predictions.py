@@ -14,6 +14,7 @@ python convert_predictions.py \
 
 from __future__ import annotations
 import argparse, json, pathlib, sys, re
+from typing import List
 
 
 def extract_json_from_string(s: str) -> dict | None:
@@ -33,18 +34,21 @@ def json_to_bits(obj: dict) -> str:
     Extract the answer array and return it as a '0101…' string.
     Raises ValueError if not valid.
     """
+
     if "answer" not in obj:
         raise ValueError("missing 'answer' key")
 
-    ans = obj["answer"]
-    if not isinstance(ans, list):
-        raise ValueError("'answer' must be a list")
-
-    bits = []
-    for x in ans:
-        if x not in (0, 1):
+    def _collect(x, sink):
+        if isinstance(x, list):
+            for y in x:
+                _collect(y, sink)
+        elif x in (0, 1):
+            sink.append(str(x))
+        else:
             raise ValueError(f"invalid bit value: {x!r}")
-        bits.append(str(x))
+
+    bits: List[str] = []
+    _collect(obj["answer"], bits)
     return "".join(bits)
 
 

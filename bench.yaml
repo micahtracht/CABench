@@ -2,11 +2,10 @@
 # CA-Bench configuration: which datasets and which models to evaluate
 
 datasets:
-  # A small public sanity set generated earlier
-  - name: val_public
-    path: data/val_public.jsonl
+  - name: val2d_public
+    path: data/val2d_public.jsonl
     timesteps: 1
-
+    dim: 2
 models:
   # Replace with the exact model string from the provider’s docs
   - id: gpt-4.1-nano

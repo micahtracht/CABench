@@ -21,7 +21,7 @@ class Problem2D:
 class CAProblemGenerator2D:
     """
     Random 2-D outer-totalistic binary CA task generator.
-    Grid cells outside the H×W rectangle are treated as 0 (dead).
+    Grid cells outside the HxW rectangle are treated as 0 (dead).
     """
     def __init__(self, height: int, width: int, *, seed: int = 42, density: float = 0.5):
         self.h = height
@@ -48,7 +48,7 @@ class CAProblemGenerator2D:
 
     def _make_grid(self) -> List[List[int]]:
         """
-        Generate a random H×W binary grid with the given density.
+        Generate a random HxW binary grid with the given density.
         """
         return [
             [int(self.rng.random() < self.density) for _ in range(self.w)]
