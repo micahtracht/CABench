@@ -5,6 +5,7 @@ orchestrator.py
 Run CA-Bench end-to-end:
 
 1. For each dataset/model in bench.yaml:
+     - (optional) generate the dataset if a "gen" block is present
      - invoke run_llm_json.py to get structured JSONL predictions
      - convert JSONL → plain-text preds
      - evaluate with eval.py
@@ -70,6 +71,21 @@ def run(cfg_path: Path, dry_run: bool = False) -> None:
             ])
 
         for ds in spec["datasets"]:
+            # Optional: auto-generate dataset if a "gen" block is present
+            if "gen" in ds:
+                gen_cfg = ds["gen"].copy()
+                mode    = gen_cfg.pop("mode", "1d")
+                outfile = Path(ds["path"])
+                if not outfile.exists():
+                    from generate_dataset import dispatch_main as gen_cli
+                    argv = ["--mode", mode, "--outfile", str(outfile)]
+                    for k, v in gen_cfg.items():
+                        argv += [f"--{k}", str(v)]
+                    print(f"Generating dataset {ds['name']} → {outfile}")
+                    gen_cli(argv)
+                else:
+                    print(f"Dataset {ds['name']} already exists; skipping generation")
+
             gold_path = Path(ds["path"])
             if not gold_path.exists():
                 print("Dataset not found:", gold_path, file=sys.stderr)

@@ -1,16 +1,34 @@
 # bench.yaml
-# CA-Bench configuration: which datasets and which models to evaluate
-
 datasets:
-  - name: val2d_public
-    path: data/val2d_public.jsonl
-    timesteps: 1
+  # on-the-fly 1-D set
+  - name: quick1d_32
+      # generation parameters (interpreted by orchestrator)
+    gen:
+      mode: 1d          # 1d or 2d
+      n: 256
+      size: 32
+      timesteps: 4
+      density: 0.4
+      seed: 123
+    path: data/quick1d_32.jsonl # orchestrator will create it
+    dim: 1 # for the chooser logic
+
+  # on-the-fly 2-D set 
+  - name: quick2d_16x16
+    gen:
+      mode: 2d
+      n: 64
+      height: 16
+      width: 16
+      timesteps: 1
+      density: 0.5
+      seed: 42
+    path: data/quick2d_16x16.jsonl
     dim: 2
+
 models:
-  # Replace with the exact model string from the provider’s docs
   - id: gpt-4.1-nano
     provider: openai
-    max_calls_per_min: 15      # orchestrator will throttle to this
-    price_per_1k_tokens: 0.0004 # USD estimate for cost projection
-    temperature: 0             # keep baseline deterministic
-
+    max_calls_per_min: 15
+    price_per_1k_tokens: 0.003
+    temperature: 0
