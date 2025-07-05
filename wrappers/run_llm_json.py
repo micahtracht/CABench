@@ -17,14 +17,11 @@ import re
 from generate import ECAProblemGenerator, Problem1D
 from rules import Rule1D
 
-
 # constants & client
 PRICE_PER_1K = 0.003
 HARD_CAP     = 5.00
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-if client.api_key is None:
-    sys.exit("OPENAI_API_KEY env var not set")
+client = None
 
 #generator instance just for its prompt-builder method
 gen = ECAProblemGenerator(state_size=0) # size unused for prompt building
@@ -55,8 +52,7 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
     json_output = extract_json_from_string(resp.choices[0].message.content)
 
     if json_output is None:
-        # You can decide how to handle cases where no JSON is found.
-        # For now, we'll raise an error.
+        # Raise an error if no valid JSON is found.
         raise ValueError("No valid JSON object found in the model's response.")
 
     return json_output, {
@@ -65,7 +61,6 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
         "total": resp.usage.total_tokens,
     }
 
-# ------------------------------------------------------------------ #
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
@@ -76,6 +71,13 @@ def main() -> None:
     ap.add_argument("--tpm", type=int, default=60, help="max calls / minute")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    # only initialize the client if we're doing a real run
+    global client
+    if not args.dry_run:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        if client.api_key is None:
+            sys.exit("OPENAI_API_KEY env var not set")
 
     done = 0
     if args.output.exists():
@@ -119,17 +121,16 @@ def main() -> None:
                 sys.exit(f"cost {running_cost:.2f} > hard cap ${HARD_CAP}")
 
             out_jsonl.write(json.dumps(data, separators=(",", ":")) + "\n")
-            writer.writerow(
-                [
-                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    args.model,
-                    usage["prompt"],
-                    usage["completion"],
-                    usage["total"],
-                    f"{usd:.5f}",
-                ]
-            )
-            out_jsonl.flush(); usage_csv.flush()
+            writer.writerow([
+                time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                args.model,
+                usage["prompt"],
+                usage["completion"],
+                usage["total"],
+                f"{usd:.5f}",
+            ])
+            out_jsonl.flush()
+            usage_csv.flush()
             time.sleep(60 / args.tpm)
 
     print(
