@@ -23,8 +23,8 @@ from generate import CAProblemGenerator2D, Problem2D
 from rules import Rule2D
 from simulate import simulate_2d   # only used for optional sanity checks
 
-PRICE_PER_1K = 0.003          # USD
-HARD_CAP     = 5.00           # abort if projected spend exceeds this
+PRICE_PER_1K = 0.003  # USD
+HARD_CAP     = 5.00   # abort if projected spend exceeds this
 
 client = None  # will be set in main()
 
@@ -51,9 +51,15 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
         temperature=temperature,
     )
 
-    data = extract_json_from_string(resp.choices[0].message.content)
-    if data is None:
-        raise ValueError("No valid JSON object found in model response")
+    raw = resp.choices[0].message.content
+    parsed = extract_json_from_string(raw)
+    if parsed is None:
+        print(
+            "[warning] failed to parse JSON from model response; "
+            "logging empty answer",
+            file=sys.stderr,
+        )
+        parsed = {"answer": []}
 
     u = resp.usage
     usage = {
@@ -61,7 +67,7 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
         "completion": u.completion_tokens,
         "total": u.total_tokens,
     }
-    return data, usage
+    return parsed, usage
 
 def reconstruct_problem(record: Dict) -> Problem2D:
     """Rebuild a Problem2D from a JSON dict in the dataset."""
@@ -137,7 +143,6 @@ def main() -> None:
 
     print(f"Finished {idx-done} calls; total spent ≈ ${running_cost:.2f}. "
           f"Preds → {args.output}")
-
 
 if __name__ == "__main__":
     main()

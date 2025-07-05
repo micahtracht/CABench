@@ -1,3 +1,7 @@
 date_utc,dataset,model,norm_hamming,exact_pct,total_cost_usd,pred_file
 2025-07-05T18:21:53+00:00,quick1d_32,gpt-4.1-nano,0.0000,0.00,0.0000,C:\Users\sl33p\CABench\data\gpt-4.1-nano_quick1d_32.preds
 2025-07-05T18:21:54+00:00,quick2d_16x16,gpt-4.1-nano,0.0000,0.00,0.0000,C:\Users\sl33p\CABench\data\gpt-4.1-nano_quick2d_16x16.preds
+2025-07-05T18:24:58+00:00,quick1d_32,gpt-4.1-nano,0.0000,0.00,0.0000,C:\Users\sl33p\CABench\data\gpt-4.1-nano_quick1d_32.preds
+2025-07-05T18:24:59+00:00,quick2d_16x16,gpt-4.1-nano,0.0000,0.00,0.0000,C:\Users\sl33p\CABench\data\gpt-4.1-nano_quick2d_16x16.preds
+2025-07-05T18:26:58+00:00,quick1d_32,gpt-4.1-nano,0.0000,0.00,0.0000,C:\Users\sl33p\CABench\data\gpt-4.1-nano_quick1d_32.preds
+2025-07-05T18:26:59+00:00,quick2d_16x16,gpt-4.1-nano,0.0000,0.00,0.0000,C:\Users\sl33p\CABench\data\gpt-4.1-nano_quick2d_16x16.preds

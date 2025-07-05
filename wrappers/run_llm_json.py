@@ -23,8 +23,8 @@ HARD_CAP     = 5.00
 
 client = None
 
-#generator instance just for its prompt-builder method
-gen = ECAProblemGenerator(state_size=0) # size unused for prompt building
+# generator instance just for its prompt-builder method
+gen = ECAProblemGenerator(state_size=0)  # size unused for prompt building
 
 def extract_json_from_string(s: str) -> dict | None:
     """
@@ -44,18 +44,21 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},     # JSON mode
+        response_format={"type": "json_object"},  # JSON mode
         temperature=temperature,
     )
-    
-    # Extract JSON from the potentially messy response string
-    json_output = extract_json_from_string(resp.choices[0].message.content)
 
-    if json_output is None:
-        # Raise an error if no valid JSON is found.
-        raise ValueError("No valid JSON object found in the model's response.")
+    raw = resp.choices[0].message.content
+    parsed = extract_json_from_string(raw)
+    if parsed is None:
+        print(
+            "[warning] failed to parse JSON from model response; "
+            "logging empty answer",
+            file=sys.stderr,
+        )
+        parsed = {"answer": []}
 
-    return json_output, {
+    return parsed, {
         "prompt": resp.usage.prompt_tokens,
         "completion": resp.usage.completion_tokens,
         "total": resp.usage.total_tokens,
@@ -106,7 +109,7 @@ def main() -> None:
             rule_obj = Rule1D(rule_bits)
             prob = Problem1D(start_state=init, rule=rule_obj, timesteps=rec["timesteps"])
 
-            prompt = gen.generate_prompt_1D(prob)   # <- existing builder
+            prompt = gen.generate_prompt_1D(prob)
 
             # -------- dry-run branch --------------------------------
             if args.dry_run:
