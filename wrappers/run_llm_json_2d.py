@@ -18,7 +18,7 @@ from typing import Dict, List
 
 from openai import OpenAI, RateLimitError, APIError
 import backoff
-from .rate_limit import wait_one_second
+from .rate_limit import wait_one_second, set_tpm
 
 from generate import CAProblemGenerator2D, Problem2D
 from rules import Rule2D
@@ -92,6 +92,9 @@ def main() -> None:
     ap.add_argument("--tpm", type=int, default=60, help="max calls / minute")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    # adjust rate limiter according to target RPM
+    set_tpm(args.tpm)
 
     # only initialize the client if this is not a dry run
     global client
