@@ -3,6 +3,7 @@
 import csv, os, pathlib, re, sys, time
 import openai
 from openai import OpenAI
+from .rate_limit import wait_one_second
 
 MODEL = "gpt-4o-mini"
 PRICE_PER_1K = 0.003
@@ -21,6 +22,7 @@ if api_key is None:
 
 client = OpenAI(api_key=api_key)
 
+wait_one_second()
 resp = client.chat.completions.create(
     model=MODEL,
     messages=[{"role": "user", "content": prompt_text}],

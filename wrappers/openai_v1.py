@@ -1,6 +1,7 @@
 from __future__ import annotations
 from openai import OpenAI
 import os, backoff, openai
+from .rate_limit import wait_one_second
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -12,6 +13,7 @@ def chat_once(model: str, prompt: str, temperature: float = 0.0):
     """
     Returns (reply_text, usage_dict)
     """
+    wait_one_second()
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
