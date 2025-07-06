@@ -1,9 +1,10 @@
 from __future__ import annotations
 from openai import OpenAI
 import os, backoff, openai
-from .rate_limit import wait_one_second
+from .rate_limit import wait_one_second, set_tpm
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+set_tpm(60)
 
 @backoff.on_exception(backoff.expo,
                     (openai.RateLimitError, openai.APIError),
