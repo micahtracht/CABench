@@ -13,6 +13,7 @@ from typing import Dict, List
 from openai import OpenAI, RateLimitError, APIError
 import backoff
 import re
+from .rate_limit import wait_one_second
 
 from generate import ECAProblemGenerator, Problem1D
 from rules import Rule1D
@@ -41,6 +42,7 @@ def extract_json_from_string(s: str) -> dict | None:
 @backoff.on_exception(backoff.expo, (RateLimitError, APIError), max_time=60)
 def chat_json(model: str, prompt: str, temperature: float = 0.0):
     """One JSON-mode call → (python_dict, token_usage)."""
+    wait_one_second()
     resp = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
@@ -134,7 +136,9 @@ def main() -> None:
             ])
             out_jsonl.flush()
             usage_csv.flush()
-            time.sleep(60 / args.tpm)
+            extra_wait = max(0, 60 / args.tpm - 1)
+            if extra_wait:
+                time.sleep(extra_wait)
 
     print(
         f"Finished {idx-done} calls; total spent ≈ ${running_cost:.2f}. "
