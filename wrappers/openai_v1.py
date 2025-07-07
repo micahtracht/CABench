@@ -19,6 +19,7 @@ def chat_once(model: str, prompt: str, temperature: float = 0.0):
         model=model,
         messages=[{"role": "user", "content": prompt}],
         temperature=temperature,
+        max_tokens=1000,
     )
     msg = resp.choices[0].message.content.strip()
     u = resp.usage

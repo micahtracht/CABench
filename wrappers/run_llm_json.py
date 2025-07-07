@@ -48,6 +48,7 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},  # JSON mode
         temperature=temperature,
+        max_tokens=1000,
     )
 
     raw = resp.choices[0].message.content
