@@ -3,7 +3,7 @@
 import csv, os, pathlib, re, sys, time
 import openai
 from openai import OpenAI
-from .rate_limit import wait_one_second
+from .rate_limit import wait_one_second, set_tpm
 
 MODEL = "gpt-4o-mini"
 PRICE_PER_1K = 0.003
@@ -21,12 +21,14 @@ if api_key is None:
     sys.exit("OPENAI_API_KEY env var missing")
 
 client = OpenAI(api_key=api_key)
+set_tpm(60)
 
 wait_one_second()
 resp = client.chat.completions.create(
     model=MODEL,
     messages=[{"role": "user", "content": prompt_text}],
     temperature=0,
+    max_tokens=1000,
 )
 
 reply_text = resp.choices[0].message.content.strip()

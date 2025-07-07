@@ -1,9 +1,10 @@
 from __future__ import annotations
 from openai import OpenAI
 import os, backoff, openai
-from .rate_limit import wait_one_second
+from .rate_limit import wait_one_second, set_tpm
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+set_tpm(60)
 
 @backoff.on_exception(backoff.expo,
                     (openai.RateLimitError, openai.APIError),
@@ -18,6 +19,7 @@ def chat_once(model: str, prompt: str, temperature: float = 0.0):
         model=model,
         messages=[{"role": "user", "content": prompt}],
         temperature=temperature,
+        max_tokens=1000,
     )
     msg = resp.choices[0].message.content.strip()
     u = resp.usage

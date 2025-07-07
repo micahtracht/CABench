@@ -97,7 +97,10 @@ def run(cfg_path: Path, dry_run: bool = False) -> None:
             for mdl in spec["models"]:
                 model_id     = mdl["id"]
                 price_per_1k = mdl["price_per_1k_tokens"]
-                max_calls    = mdl["max_calls_per_min"]
+                if model_id == "gpt-4.1-nano":
+                    max_calls = 250
+                else:
+                    max_calls = mdl.get("max_calls_per_min", 60)
 
                 # projected cost guard
                 if not dry_run:
