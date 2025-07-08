@@ -21,7 +21,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 import yaml
 
 # Paths & Globals
@@ -50,8 +50,35 @@ def projected_cost(n_prompts: int, price_per_1k: float, avg_tok: int = 120) -> f
 
 
 # Main orchestration
-def run(cfg_path: Path, dry_run: bool = False, model_id: str | None = None) -> None:
+def run(
+    cfg_path: Path,
+    dry_run: bool = False,
+    model_id: Optional[str] = None,
+    dim: Optional[int] = None,
+    force_new: bool = False,
+    file: Optional[Path] = None,
+    num_questions: Optional[int] = None,
+) -> None:
     spec = yaml.safe_load(cfg_path.read_text())
+
+    # Filter datasets by dimension if requested
+    if dim is not None:
+        spec["datasets"] = [ds for ds in spec["datasets"] if ds.get("dim", 1) == dim]
+        if not spec["datasets"]:
+            print(f"No datasets matching dimension {dim}", file=sys.stderr)
+            return
+
+    # Override dataset path if a custom file is provided
+    if file is not None:
+        for ds in spec["datasets"]:
+            ds["path"] = str(file)
+            ds["name"] = Path(file).stem
+
+    # Override number of questions for dataset generation
+    if num_questions is not None:
+        for ds in spec["datasets"]:
+            if "gen" in ds:
+                ds["gen"]["n"] = num_questions
 
     scores_path     = RESULT_DIR / "scores.csv"
     first_write     = not scores_path.exists()
@@ -76,7 +103,7 @@ def run(cfg_path: Path, dry_run: bool = False, model_id: str | None = None) -> N
                 gen_cfg = ds["gen"].copy()
                 mode    = gen_cfg.pop("mode", "1d")
                 outfile = Path(ds["path"])
-                if not outfile.exists():
+                if force_new or not outfile.exists():
                     from generate_dataset import dispatch_main as gen_cli
                     argv = ["--mode", mode, "--outfile", str(outfile)]
                     for k, v in gen_cfg.items():
@@ -91,7 +118,21 @@ def run(cfg_path: Path, dry_run: bool = False, model_id: str | None = None) -> N
                 print("Dataset not found:", gold_path, file=sys.stderr)
                 continue
 
-            n_cases = sum(1 for _ in gold_path.open())
+            n_total = sum(1 for _ in gold_path.open())
+            n_cases = n_total
+
+            # Create a truncated copy if num_questions is set and dataset is larger
+            if num_questions is not None and num_questions < n_total:
+                head_path = gold_path.parent / f"{gold_path.stem}_head{num_questions}{gold_path.suffix}"
+                if force_new or not head_path.exists() or sum(1 for _ in head_path.open()) != num_questions:
+                    with gold_path.open() as src, head_path.open("w", encoding="utf-8") as dst:
+                        for idx, line in enumerate(src):
+                            if idx >= num_questions:
+                                break
+                            dst.write(line)
+                gold_path = head_path
+                n_cases = num_questions
+
             print(f"Dataset {ds['name']} — {n_cases} cases")
 
             for mdl in spec["models"]:
@@ -234,9 +275,38 @@ if __name__ == "__main__":
         help="If set, only run this model (must match one of the IDs in bench.yaml)",
     )
     parser.add_argument(
+        "--dim",
+        type=int,
+        choices=[1, 2],
+        help="Number of dimensions in the question (1 or 2)",
+    )
+    parser.add_argument(
+        "--new",
+        action="store_true",
+        help="Generate new questions even if dataset file exists",
+    )
+    parser.add_argument(
+        "--file",
+        type=Path,
+        help="Use questions from this specific file",
+    )
+    parser.add_argument(
+        "--numquestions",
+        type=int,
+        help="Number of questions to use in the benchmark",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Build artifacts without calling the API",
     )
     args = parser.parse_args()
-    run(args.config, dry_run=args.dry_run, model_id=args.model_id)
+    run(
+        args.config,
+        dry_run=args.dry_run,
+        model_id=args.model_id,
+        dim=args.dim,
+        force_new=args.new,
+        file=args.file,
+        num_questions=args.numquestions,
+    )
