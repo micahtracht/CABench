@@ -29,6 +29,18 @@ datasets:
 models:
   - id: gpt-4.1-nano
     provider: openai
-    max_calls_per_min: 15
+    max_calls_per_min: 120
     price_per_1k_tokens: 0.003
+    temperature: 0
+
+  - id: gpt-4.1
+    provider: openai
+    max_calls_per_min: 60
+    price_per_1k_tokens: 0.048
+    temperature: 0
+
+  - id: gpt-4.1-mini
+    provider: openai
+    max_calls_per_min: 60
+    price_per_1k_tokens: 0.012
     temperature: 0
