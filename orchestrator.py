@@ -58,6 +58,7 @@ def run(
     force_new: bool = False,
     file: Optional[Path] = None,
     num_questions: Optional[int] = None,
+    force_preds: bool = False,
 ) -> None:
     spec = yaml.safe_load(cfg_path.read_text())
 
@@ -177,6 +178,11 @@ def run(
                 # 1) call LLM for structured JSONL predictions
                 jsonl_preds = DATA_DIR / f"{model_id_run}_{ds['name']}.jsonl"
                 usage_csv   = LOG_DIR   / f"{model_id_run}_{ds['name']}_usage.csv"
+
+                if force_preds:
+                    for p in (jsonl_preds, usage_csv):
+                        if p.exists():
+                            p.unlink()
 
                 cmd = [
                     sys.executable, "-m", runner_mod,
@@ -300,6 +306,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Build artifacts without calling the API",
     )
+    parser.add_argument(
+        "--force-preds",
+        action="store_true",
+        help="Overwrite prediction & usage files before model call",
+    )
     args = parser.parse_args()
     run(
         args.config,
@@ -309,4 +320,5 @@ if __name__ == "__main__":
         force_new=args.new,
         file=args.file,
         num_questions=args.numquestions,
+        force_preds=args.force_preds,
     )
