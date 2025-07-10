@@ -242,6 +242,8 @@ class ECAProblemGenerator:
         if isinstance(timesteps, int):
             timestep_list = [timesteps] * len(problem_list)
         else:
-            if len(timesteps) < len(problem_list):
+            timestep_list = list(timesteps)
+            if len(timestep_list) != len(problem_list):
                 raise ValueError("Length of timesteps must equal the number of problems.")
+
         return [self.generate_prompt_1D(problem_list[i], timestep_list[i]) for i in range(len(problem_list))]

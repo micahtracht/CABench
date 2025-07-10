@@ -71,3 +71,14 @@ def test_generate_prompt_batch_length():
     # ensure ordering is preserved
     for p_obj, p_txt in zip(probs, prompts):
         assert str(p_obj.start_state) in p_txt
+
+
+def test_generate_prompt_batch_list_timesteps():
+    gen = ECAProblemGenerator(state_size=6, seed=3, density=0.4)
+    probs = gen.generate_batch(3, timesteps=1)
+    timesteps = [1, 2, 3]
+    prompts = gen.generate_prompt_1d_batch(probs, timesteps)
+
+    assert len(prompts) == len(probs)
+    for prompt, t in zip(prompts, timesteps):
+        assert f"After {t} timestep" in prompt
