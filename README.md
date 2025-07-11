@@ -76,9 +76,9 @@ TBD (results not obtained yet)
 ## Citation
 @misc{CABench2025,
   title  = {CA-Bench: Evaluating Spatial & Working-Memory Reasoning in LLMs},
-  author = {<Your Name>},
+  author = {Micah Tracht},
   year   = {2025},
-  url    = {https://github.com/<org>/CABench}
+  url    = {https://github.com/micahtracht/CABench}
 }
 
 ## License
