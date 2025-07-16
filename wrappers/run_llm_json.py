@@ -41,7 +41,7 @@ def extract_json_from_string(s: str) -> dict | None:
 
 @backoff.on_exception(backoff.expo, (RateLimitError, APIError), max_time=60)
 def chat_json(model: str, prompt: str, temperature: float = 0.0):
-    """One JSON-mode call → (python_dict, token_usage)."""
+    """One JSON-mode call → (python_dict, token_usage, raw_text)."""
     wait_one_second()
     resp = client.chat.completions.create(
         model=model,
@@ -65,7 +65,7 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
         "prompt": resp.usage.prompt_tokens,
         "completion": resp.usage.completion_tokens,
         "total": resp.usage.total_tokens,
-    }
+    }, raw
 
 def main() -> None:
     ap = argparse.ArgumentParser()
@@ -76,6 +76,8 @@ def main() -> None:
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--tpm", type=int, default=60, help="max calls / minute")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--raw-log", type=pathlib.Path,
+                    help="File to append raw model responses")
     args = ap.parse_args()
 
     # adjust internal rate limiter
@@ -88,12 +90,24 @@ def main() -> None:
         if client.api_key is None:
             sys.exit("OPENAI_API_KEY env var not set")
 
+    total_records = sum(1 for _ in args.input.open())
+
     done = 0
+    out_mode = "a"
     if args.output.exists():
         done = sum(1 for _ in args.output.open())
-        print(f"Resuming — {done} predictions already exist")
+        if done > total_records:
+            print(
+                f"[info] existing prediction file has {done} lines; dataset has {total_records}. Starting fresh"
+            )
+            done = 0
+            out_mode = "w"
+        else:
+            print(f"Resuming — {done} predictions already exist")
 
-    out_jsonl = args.output.open("a", encoding="utf-8")
+    out_jsonl = args.output.open(out_mode, encoding="utf-8")
+    raw_log_path = args.raw_log if args.raw_log else args.output.with_suffix(".raw")
+    raw_log = raw_log_path.open("a", encoding="utf-8")
     usage_csv = args.usage.open("a", newline="")
     writer = csv.writer(usage_csv)
     if usage_csv.tell() == 0:
@@ -123,13 +137,15 @@ def main() -> None:
                 continue
 
             # -------- live call -------------------------------------
-            data, usage = chat_json(args.model, prompt, args.temperature)
+            data, usage, raw_txt = chat_json(args.model, prompt, args.temperature)
             usd = usage["total"] / 1000 * PRICE_PER_1K
             running_cost += usd
             if running_cost > HARD_CAP:
                 sys.exit(f"cost {running_cost:.2f} > hard cap ${HARD_CAP}")
 
             out_jsonl.write(json.dumps(data, separators=(",", ":")) + "\n")
+            raw_log.write(raw_txt + "\n")
+            raw_log.flush()
             writer.writerow([
                 time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 args.model,
