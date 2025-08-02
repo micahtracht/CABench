@@ -14,6 +14,7 @@ from openai import OpenAI, RateLimitError, APIError
 import backoff
 import re
 from .rate_limit import wait_one_second, set_tpm
+from .response_logger import log_response
 
 from generate import ECAProblemGenerator, Problem1D
 from rules import Rule1D
@@ -52,6 +53,7 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
     )
 
     raw = resp.choices[0].message.content
+    log_response(model, raw)
     parsed = extract_json_from_string(raw)
     if parsed is None:
         print(
