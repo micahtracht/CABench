@@ -2,6 +2,7 @@ from __future__ import annotations
 from openai import OpenAI
 import os, backoff, openai
 from .rate_limit import wait_one_second, set_tpm
+from .response_logger import log_response
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 set_tpm(60)
@@ -21,7 +22,9 @@ def chat_once(model: str, prompt: str, temperature: float = 0.0):
         temperature=temperature,
         max_tokens=1000,
     )
-    msg = resp.choices[0].message.content.strip()
+    raw_txt = resp.choices[0].message.content
+    log_response(model, raw_txt)
+    msg = raw_txt.strip()
     u = resp.usage
     usage = {
         "prompt_tokens": u.prompt_tokens,

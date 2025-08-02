@@ -4,6 +4,7 @@ import csv, os, pathlib, re, sys, time
 import openai
 from openai import OpenAI
 from .rate_limit import wait_one_second, set_tpm
+from .response_logger import log_response
 
 MODEL = "gpt-4o-mini"
 PRICE_PER_1K = 0.003
@@ -31,7 +32,9 @@ resp = client.chat.completions.create(
     max_tokens=1000,
 )
 
-reply_text = resp.choices[0].message.content.strip()
+raw_txt = resp.choices[0].message.content
+log_response(MODEL, raw_txt)
+reply_text = raw_txt.strip()
 
 usage = resp.usage
 usd_cost = usage.total_tokens / 1000 * PRICE_PER_1K

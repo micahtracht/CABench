@@ -19,6 +19,7 @@ from typing import Dict, List
 from openai import OpenAI, RateLimitError, APIError
 import backoff
 from .rate_limit import wait_one_second, set_tpm
+from .response_logger import log_response
 
 from generate import CAProblemGenerator2D, Problem2D
 from rules import Rule2D
@@ -55,6 +56,7 @@ def chat_json(model: str, prompt: str, temperature: float = 0.0):
     )
 
     raw = resp.choices[0].message.content
+    log_response(model, raw)
     parsed = extract_json_from_string(raw)
     if parsed is None:
         print(
