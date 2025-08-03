@@ -35,6 +35,12 @@ for d in (DATA_DIR, LOG_DIR, RESULT_DIR):
 
 HARD_SPEND_CEILING = 5.00  # USD
 
+# System prompt for structured responses
+SYSTEM_PROMPT = (
+    "Respond with a JSON object containing keys 'initial_state' and 'final_state' "
+    "(alias 'answer'). Do not include any extra text outside the JSON."
+)
+
 # Helpers
 def shell(cmd: List[str]) -> None:
     """Run a subprocess and exit if it fails."""
@@ -191,6 +197,8 @@ def run(
                     "--output", str(jsonl_preds),
                     "--usage", str(usage_csv),
                     "--tpm", str(max_calls),
+                    "--temperature", "0",
+                    "--system", SYSTEM_PROMPT,
                 ]
                 if dry_run:
                     cmd.append("--dry-run")

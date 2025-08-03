@@ -33,6 +33,12 @@ client = None  # will be set in main()
 # dummy generator solely for its prompt builder
 _prompt_gen = CAProblemGenerator2D(height=1, width=1)
 
+# default system prompt enforcing structured JSON
+DEFAULT_SYSTEM_PROMPT = (
+    "Respond with a JSON object containing keys 'initial_state' and 'final_state' "
+    "(alias 'answer'). Do not include any extra text outside the JSON."
+)
+
 def extract_json_from_string(s: str) -> dict | None:
     """Return first JSON object embedded in a string (or None)."""
     m = re.search(r"\{.*\}", s, re.DOTALL)
@@ -44,12 +50,20 @@ def extract_json_from_string(s: str) -> dict | None:
         return None
 
 @backoff.on_exception(backoff.expo, (RateLimitError, APIError), max_time=60)
-def chat_json(model: str, prompt: str, temperature: float = 0.0):
+def chat_json(
+    model: str,
+    prompt: str,
+    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+    temperature: float = 0.0,
+):
     """One JSON-mode chat completion → (python_dict, usage_dict, raw_text)."""
     wait_one_second()
     resp = client.chat.completions.create(
         model=model,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ],
         response_format={"type": "json_object"},
         temperature=temperature,
         max_tokens=1000,
@@ -92,6 +106,7 @@ def main() -> None:
     ap.add_argument("--output", type=pathlib.Path, required=True)
     ap.add_argument("--usage",  type=pathlib.Path, required=True)
     ap.add_argument("--temperature", type=float, default=0.0)
+    ap.add_argument("--system", type=str, default=DEFAULT_SYSTEM_PROMPT)
     ap.add_argument("--tpm", type=int, default=60, help="max calls / minute")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--raw-log", type=pathlib.Path,
@@ -147,7 +162,9 @@ def main() -> None:
                 out_jsonl.write(json.dumps({"answer": []}) + "\n")
                 continue
 
-            data, usage, raw_txt = chat_json(args.model, prompt, args.temperature)
+            data, usage, raw_txt = chat_json(
+                args.model, prompt, args.system, args.temperature
+            )
             usd = usage["total"] / 1000 * PRICE_PER_1K
             running_cost += usd
             if running_cost > HARD_CAP:
