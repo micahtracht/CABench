@@ -54,34 +54,41 @@ def chat_json(
     temperature: float = 0.0,
 ):
     """One JSON-mode call → (python_dict, token_usage, raw_text)."""
-    wait_one_second()
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        response_format={"type": "json_object"},  # JSON mode
-        temperature=temperature,
-        max_tokens=1000,
-    )
+    REQUIRED_KEYS = ("answer",)
+    total_usage = {"prompt": 0, "completion": 0, "total": 0}
+    raw = ""
 
-    raw = resp.choices[0].message.content
-    log_response(model, raw)
-    parsed = extract_json_from_string(raw)
-    if parsed is None:
-        print(
-            "[warning] failed to parse JSON from model response; "
-            "logging empty answer",
-            file=sys.stderr,
+    for attempt in range(5):
+        wait_one_second()
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},  # JSON mode
+            temperature=temperature,
+            max_tokens=1000,
         )
-        parsed = {"answer": []}
 
-    return parsed, {
-        "prompt": resp.usage.prompt_tokens,
-        "completion": resp.usage.completion_tokens,
-        "total": resp.usage.total_tokens,
-    }, raw
+        raw = resp.choices[0].message.content
+        log_response(model, raw)
+        u = resp.usage
+        total_usage["prompt"] += u.prompt_tokens
+        total_usage["completion"] += u.completion_tokens
+        total_usage["total"] += u.total_tokens
+
+        parsed = extract_json_from_string(raw)
+        if parsed is None or any(k not in parsed for k in REQUIRED_KEYS):
+            warn = "[warning] failed to parse JSON or missing keys;"
+            if attempt < 4:
+                print(warn + " retrying", file=sys.stderr)
+                continue
+            print(warn + " logging empty answer", file=sys.stderr)
+            parsed = {"answer": []}
+        break
+
+    return parsed, total_usage, raw
 
 def main() -> None:
     ap = argparse.ArgumentParser()
