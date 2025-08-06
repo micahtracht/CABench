@@ -36,7 +36,10 @@ def json_to_bits(obj: dict) -> str:
     """
 
     if "answer" not in obj:
-        raise ValueError("missing 'answer' key")
+        if "final_state" in obj:
+            obj["answer"] = obj["final_state"]
+        else:
+            raise ValueError("missing 'answer' key")
 
     def _collect(x, sink):
         if isinstance(x, list):

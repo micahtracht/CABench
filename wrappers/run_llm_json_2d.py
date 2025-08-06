@@ -57,7 +57,7 @@ def chat_json(
     temperature: float = 0.0,
 ):
     """One JSON-mode chat completion → (python_dict, usage_dict, raw_text)."""
-    REQUIRED_KEYS = ("answer",)
+    REQUIRED_KEYS = ("answer", "final_state")
     total_usage = {"prompt": 0, "completion": 0, "total": 0}
     raw = ""
 
@@ -82,13 +82,15 @@ def chat_json(
         total_usage["total"] += u.total_tokens
 
         parsed = extract_json_from_string(raw)
-        if parsed is None or any(k not in parsed for k in REQUIRED_KEYS):
+        if parsed is None or not any(k in parsed for k in REQUIRED_KEYS):
             warn = "[warning] failed to parse JSON or missing keys;"
             if attempt < 4:
                 print(warn + " retrying", file=sys.stderr)
                 continue
             print(warn + " logging empty answer", file=sys.stderr)
             parsed = {"answer": []}
+        elif "answer" not in parsed and "final_state" in parsed:
+            parsed["answer"] = parsed["final_state"]
         break
 
     return parsed, total_usage, raw
