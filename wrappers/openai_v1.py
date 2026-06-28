@@ -1,9 +1,11 @@
 from __future__ import annotations
 from openai import OpenAI
 import os, backoff, openai
+from cabench.env import load_project_env
 from .rate_limit import wait_one_second, set_tpm
 from .response_logger import log_response
 
+load_project_env()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 set_tpm(60)
 

@@ -68,10 +68,14 @@ VENV/
 # Secrets
 *.env
 .env.*
+!.env.example
 
-# Generated data files
+# Generated benchmark artifacts
 *.jsonl
 data/
+logs/
+results/
 
 # IDE / Editor specific
 .vscode/
+INFO.md

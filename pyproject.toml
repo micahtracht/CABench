@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cabench"
+version = "0.1.0"
+description = "Cellular automata benchmark for LLM spatial and working-memory reasoning."
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "MIT" }
+authors = [
+  { name = "Micah Tracht" }
+]
+keywords = ["benchmark", "llm", "cellular-automata", "evaluation"]
+dependencies = [
+  "numpy",
+  "openai>=1.0.0",
+  "pyyaml",
+  "backoff",
+  "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+  "build",
+  "pytest",
+]
+
+[project.scripts]
+cabench = "cabench.cli:main"
+
+[tool.setuptools]
+py-modules = [
+  "contracts",
+  "convert_predictions",
+  "eval",
+  "generate",
+  "generate_dataset",
+  "json_extract",
+  "migrate_artifacts",
+  "orchestrator",
+  "report_results",
+  "rules",
+  "simulate",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cabench*", "wrappers*"]
+namespaces = true

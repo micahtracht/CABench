@@ -9,8 +9,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
       - name: Check out code
@@ -19,12 +17,35 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests
+      - name: Run full test suite
         run: pytest -q
+
+      - name: Run mocked end-to-end pipeline test (explicit)
+        run: pytest -q tests/test_pipeline_mocked_openai.py
+
+      - name: Dry-run smoke + generate report
+        run: |
+          mkdir -p ci_artifacts
+          python orchestrator.py \
+            --config bench.yaml \
+            --dry-run \
+            --data-dir ci_artifacts/data \
+            --log-dir ci_artifacts/logs \
+            --results-dir ci_artifacts/results \
+            --no-summary
+          python report_results.py \
+            --scores ci_artifacts/results/scores.csv \
+            --out ci_artifacts/results/report.txt
+
+      - name: Upload CI report artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cabench-ci-artifacts
+          path: ci_artifacts/

@@ -1,29 +1,29 @@
 # bench.yaml
 datasets:
-  # on-the-fly 1-D set
-  - name: quick1d_32
+  # on-the-fly 1-D presentation baseline
+  - name: bench1d_32
       # generation parameters (interpreted by orchestrator)
     gen:
       mode: 1d          # 1d or 2d
-      n: 256
+      n: 128
       size: 32
       timesteps: 4
-      density: 0.4
+      density: 0.5
       seed: 123
-    path: data/quick1d_32.jsonl # orchestrator will create it
+    path: data/bench1d_32.jsonl # orchestrator will create it
     dim: 1 # for the chooser logic
 
-  # on-the-fly 2-D set 
-  - name: quick2d_16x16
+  # on-the-fly 2-D presentation baseline
+  - name: bench2d_32x32
     gen:
       mode: 2d
-      n: 64
-      height: 16
-      width: 16
+      n: 128
+      height: 32
+      width: 32
       timesteps: 1
       density: 0.5
       seed: 42
-    path: data/quick2d_16x16.jsonl
+    path: data/bench2d_32x32.jsonl
     dim: 2
 
 models:
@@ -44,3 +44,21 @@ models:
     max_calls_per_min: 60
     price_per_1k_tokens: 0.012
     temperature: 0
+
+presets:
+  - name: quick
+    description: Baseline presentation run across both built-in datasets with the cheapest model.
+    datasets:
+      - bench1d_32
+      - bench2d_32x32
+    models:
+      - gpt-4.1-nano
+
+  - name: presentation
+    description: Cross-check both benchmark datasets with the cheaper presentation-friendly models.
+    datasets:
+      - bench1d_32
+      - bench2d_32x32
+    models:
+      - gpt-4.1-nano
+      - gpt-4.1-mini

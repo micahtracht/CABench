@@ -3,3 +3,4 @@ pytest
 openai>=1.0.0
 pyyaml
 backoff
+python-dotenv

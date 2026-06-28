@@ -3,12 +3,23 @@
 import csv, os, pathlib, re, sys, time
 import openai
 from openai import OpenAI
+from cabench.env import load_project_env
 from .rate_limit import wait_one_second, set_tpm
 from .response_logger import log_response
 
+load_project_env()
+
 MODEL = "gpt-4o-mini"
-PRICE_PER_1K = 0.003
-HARD_LIMIT_USD = 0.05
+DEFAULT_PRICE_PER_1K = os.getenv("CABENCH_PRICE_PER_1K")
+try:
+    PRICE_PER_1K = float(DEFAULT_PRICE_PER_1K) if DEFAULT_PRICE_PER_1K else 0.003
+except ValueError:
+    PRICE_PER_1K = 0.003
+DEFAULT_HARD_LIMIT_USD = os.getenv("CABENCH_HARD_CAP")
+try:
+    HARD_LIMIT_USD = float(DEFAULT_HARD_LIMIT_USD) if DEFAULT_HARD_LIMIT_USD else 0.05
+except ValueError:
+    HARD_LIMIT_USD = 0.05
 
 prompt_text = (
     "You are given the following 1-D CA state:\n"

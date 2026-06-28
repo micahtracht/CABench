@@ -2,21 +2,33 @@
 *A lightweight benchmark for spatial reasoning in LLMs using 1D and 2D cellular automata.*
 
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Python](https://img.shields.io/badge/Python-3.11-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
 
 ---
 
 ## Why CA Bench?
 LLMs still fail to reason spatially in an effective way. Furthermore, coming up with easily verifiable, mass produced questions that isolate these abilities is also not trivial. But by using cellular automata, we can:
--Isolate short term "working memory" & multi-step inference challenges,
--Vary dimensionality without changing scoring,
--Generate millions of unique tasks on the fly, removing contamination or data leakage concerns.
+- Isolate short term "working memory" & multi-step inference challenges,
+- Vary dimensionality without changing scoring,
+- Generate millions of unique tasks on the fly, removing contamination or data leakage concerns.
 
 ---
 
 ## Repo Layout
 
-TBD
+- `orchestrator.py`: one-command benchmark runner (generate -> predict -> convert -> eval -> log)
+- `bench.yaml`: dataset/model configuration
+- `generate_dataset.py`: generate 1D/2D CA datasets (JSONL)
+- `generate.py`, `rules.py`, `simulate.py`: CA problem/rule/simulation logic
+- `wrappers/run_llm_json.py`: 1D OpenAI runner with retries/status logging
+- `wrappers/run_llm_json_2d.py`: 2D OpenAI runner with retries/status logging
+- `convert_predictions.py`: structured model JSONL -> flattened `.preds`
+- `eval.py`: normalized Hamming + exact-match scoring
+- `report_results.py`: per-model and per-dataset comparison reports
+- `contracts.py`: canonical artifact schema names/versions
+- `results/`: benchmark outputs (`scores.csv`, `run_metadata.jsonl`)
+- `logs/`: per-call usage and master usage ledger
+- `tests/`: unit + orchestration + mocked end-to-end tests
 
 ---
 
@@ -26,14 +38,23 @@ TBD
 # clone and install dependencies
 git clone https://github.com/micahtracht/CABench.git
 cd CABench
-python -m pip install requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 
-# Set your OpenAI API key
+# Set your OpenAI API key in a local .env file (recommended)
+cp .env.example .env
+# edit .env and replace the placeholder key
+
+# or export it in your shell
 export OPENAI_API_KEY=sk-...
 
 # run the default benchmark
-python orchestrator.py # can add --dry-run to avoid API calls
+python orchestrator.py
 ```
+CABench automatically loads a repo-local `.env` file if present and will not override variables you already exported in your shell. `.env` is gitignored; `.env.example` is the committed template.
+
 Expected artifacts:
  - data/<model>_<dataset>.jsonl – model replies (JSON)
 
@@ -42,6 +63,40 @@ Expected artifacts:
  - logs/<model>_<dataset>_usage.csv – tokens + cost
 
  - results/scores.csv – one row per model/dataset run
+
+ - results/run_metadata.jsonl – reproducibility metadata per run
+
+ - logs/master_usage.csv – merged per-call usage ledger across runs
+
+ - *.schema.json sidecars – schema/version manifests for key artifacts
+
+## Orchestrator CLI
+
+`orchestrator.py` is the primary interface.
+
+```bash
+python orchestrator.py \
+  --config bench.yaml \
+  --models gpt-4.1-mini,gpt-4.1 \
+  --datasets quick1d_32,quick2d_16x16 \
+  --dim 1 \
+  --numquestions 128 \
+  --data-dir out/data \
+  --log-dir out/logs \
+  --results-dir out/results
+```
+
+Useful flags:
+- `--model-id <id>`: run one model
+- `--models a,b,c`: run multiple models
+- `--datasets a,b,c`: run selected datasets
+- `--dim 1|2`: select dimensionality
+- `--numquestions N`: limit question count
+- `--new`: force dataset regeneration
+- `--force-preds`: reset existing prediction/usage files for fresh run
+- `--dry-run`: skip API calls and API-dependent postprocessing (conversion/eval); writes dry-run markers
+- `--data-dir`, `--log-dir`, `--results-dir`: custom output roots
+- `--no-summary`: disable end-of-run summary table
 
 ## Bench.yaml cheat sheet
 ```yaml
@@ -67,11 +122,52 @@ models:
 
 ## Common Tweaks
 
-TBD
+- Fast smoke test (no API):
+```bash
+python orchestrator.py --dry-run --numquestions 8 --models gpt-4.1-mini
+```
+
+- Run only 2D datasets:
+```bash
+python orchestrator.py --dim 2
+```
+
+- Run one model on one dataset:
+```bash
+python orchestrator.py --model-id gpt-4.1-mini --datasets quick1d_32
+```
+
+- Keep outputs separate per experiment:
+```bash
+python orchestrator.py --data-dir runs/r1/data --log-dir runs/r1/logs --results-dir runs/r1/results
+```
 
 ## Results
 
-TBD (results not obtained yet)
+Generate comparison tables from accumulated scores:
+
+```bash
+python report_results.py --scores results/scores.csv --out results/report.txt
+```
+
+Report includes:
+- per-model aggregate ranking (`avg_norm_hamming`, `avg_exact_pct`, `total_cost_usd`)
+- per-dataset model comparison table
+
+## Schema Evolution & Migration
+
+Schema/version contracts are defined in `contracts.py` and governed by `SCHEMA_POLICY.md`.
+
+If you have legacy artifacts, migrate them before running strict schema writers:
+
+```bash
+python migrate_artifacts.py --results-dir results --log-dir logs
+```
+
+This upgrades/normalizes:
+- `results/scores.csv`
+- `logs/master_usage.csv` and per-run `*_usage.csv`
+- `results/run_metadata.jsonl`
 
 ## Citation
 @misc{CABench2025,

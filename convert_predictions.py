@@ -13,21 +13,14 @@ python convert_predictions.py \
 """
 
 from __future__ import annotations
-import argparse, json, pathlib, sys, re
+import argparse, json, pathlib, sys
 from typing import List
-
-
-def extract_json_from_string(s: str) -> dict | None:
-    """
-    Finds and parses the first valid JSON object from a string.
-    """
-    match = re.search(r'\{.*\}', s, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(0))
-        except json.JSONDecodeError:
-            return None
-    return None
+from contracts import (
+    PREDS_TEXT_SCHEMA_NAME,
+    PREDS_TEXT_SCHEMA_VERSION,
+    write_schema_manifest,
+)
+from json_extract import extract_first_json_object
 
 def json_to_bits(obj: dict) -> str:
     """
@@ -67,7 +60,7 @@ def convert_file(in_path: pathlib.Path, out_path: pathlib.Path) -> None:
                 continue
             try:
                 # Use the new function to extract the JSON object
-                obj = extract_json_from_string(line)
+                obj = extract_first_json_object(line)
                 if obj is None:
                     raise ValueError("No JSON object found in line")
                 
@@ -81,6 +74,13 @@ def convert_file(in_path: pathlib.Path, out_path: pathlib.Path) -> None:
                 )
                 fout.write("\n")  # keep alignment with gold file
 
+    write_schema_manifest(
+        out_path,
+        schema_name=PREDS_TEXT_SCHEMA_NAME,
+        schema_version=PREDS_TEXT_SCHEMA_VERSION,
+        fmt="text",
+        notes="One flattened binary prediction string per line; blank lines mark invalid rows.",
+    )
     print(f"wrote {n_ok} predictions. {n_bad} lines had errors → blank")
 
  

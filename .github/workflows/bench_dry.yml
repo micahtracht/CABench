@@ -14,7 +14,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
@@ -23,9 +23,27 @@ jobs:
 
       - name: Orchestrator dry run
         run: |
-          python orchestrator.py --config bench.yaml --dry-run
+          python orchestrator.py \
+            --config bench.yaml \
+            --dry-run \
+            --data-dir ci_artifacts/data \
+            --log-dir ci_artifacts/logs \
+            --results-dir ci_artifacts/results \
+            --no-summary
 
       - name: Sanity-check artefacts
         run: |
-          test -f results/scores.csv
-          grep -q "norm_hamming" results/scores.csv
+          test -f ci_artifacts/results/scores.csv
+          grep -q "norm_hamming" ci_artifacts/results/scores.csv
+
+      - name: Generate report from dry-run outputs
+        run: |
+          python report_results.py \
+            --scores ci_artifacts/results/scores.csv \
+            --out ci_artifacts/results/report.txt
+
+      - name: Upload dry-run artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cabench-dry-run-artifacts
+          path: ci_artifacts/
