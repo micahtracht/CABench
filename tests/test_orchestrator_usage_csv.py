@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from orchestrator import read_usage_csv
+from cabench.orchestrator import read_usage_csv
 
 
 def test_read_usage_csv_missing_file_returns_zero(tmp_path: Path):

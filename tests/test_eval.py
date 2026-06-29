@@ -1,5 +1,5 @@
 import json, pathlib, tempfile
-from eval import _flatten, normalized_hamming_accuracy, main as eval_cli
+from cabench.scoring import _flatten, normalized_hamming_accuracy, main as eval_cli
 import pytest
 
 def test_metric_exact():

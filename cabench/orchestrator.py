@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 """
-orchestrator.py
----------------
+cabench.orchestrator
+--------------------
 Run CA-Bench end-to-end:
 
 1. For each dataset/model in bench.yaml:
     - (optional) generate the dataset if a "gen" block is present
-    - invoke run_llm_json.py to get structured JSONL predictions
-    - convert JSONL → plain-text preds
-    - evaluate with eval.py
+    - run the in-process LLM runner (cabench.llm.runner) for structured
+      JSONL predictions
+    - convert JSONL → plain-text preds (cabench.convert)
+    - evaluate (cabench.scoring)
     - append metrics & cost to results/scores.csv
     - merge per-call usage into logs/master_usage.csv
 2. Enforce a hard $5.00 USD ceiling on actual spend
@@ -28,7 +29,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, List, Optional
 import yaml
-from contracts import (
+from cabench.contracts import (
     PRED_JSONL_SCHEMA_NAME,
     PRED_JSONL_SCHEMA_VERSION,
     RUN_METADATA_SCHEMA_NAME,
@@ -42,9 +43,12 @@ from contracts import (
     ensure_csv_header,
     write_schema_manifest,
 )
+from cabench.convert import convert_file
+from cabench.scoring import EvalError, score
+from cabench.llm.runner import run_batch
 
 # Paths & Globals
-ROOT       = Path(__file__).resolve().parent
+ROOT       = Path(__file__).resolve().parents[1]
 DATA_DIR   = ROOT / "data"
 LOG_DIR    = ROOT / "logs"
 RESULT_DIR = ROOT / "results"
@@ -60,14 +64,6 @@ SYSTEM_PROMPT = (
     "'answer'. The value must be a binary array (for 1-D) or nested binary arrays "
     "(for 2-D). No markdown, no prose, no code fences."
 )
-
-# Helpers
-def shell(cmd: List[str]) -> None:
-    """Run a subprocess and exit if it fails."""
-    print("Running:", " ".join(cmd))
-    result = subprocess.run(cmd, text=True)
-    if result.returncode:
-        sys.exit(result.returncode)
 
 
 def read_usage_csv(path: Path) -> tuple[float, list[list[str]]]:
@@ -304,7 +300,7 @@ def run(
                 gen_cfg = ds["gen"].copy()
                 mode    = gen_cfg.pop("mode", "1d")
                 if force_new or not dataset_path.exists():
-                    from generate_dataset import dispatch_main as gen_cli
+                    from cabench.dataset import dispatch_main as gen_cli
                     argv = ["--mode", mode, "--outfile", str(dataset_path)]
                     for k, v in gen_cfg.items():
                         argv += [f"--{k}", str(v)]
@@ -366,11 +362,7 @@ def run(
 
                 # pick the correct runner for this dataset's dimensionality
                 ds_dim = ds.get("dim", 1)
-                if ds_dim == 1:
-                    runner_mod = "wrappers.run_llm_json"
-                elif ds_dim == 2:
-                    runner_mod = "wrappers.run_llm_json_2d"
-                else:
+                if ds_dim not in (1, 2):
                     print(f"Unsupported dimension {ds_dim} in dataset '{ds['name']}'", file=sys.stderr)
                     continue
 
@@ -494,55 +486,34 @@ def run(
 
                 usage_before_usd, usage_before_rows = read_usage_csv(usage_csv)
 
-                cmd = [
-                    sys.executable, "-m", runner_mod,
-                    "--model", model_id_run,
-                    "--input", str(gold_path),
-                    "--output", str(jsonl_preds),
-                    "--usage", str(usage_csv),
-                    "--price-per-1k", str(price_per_1k),
-                    # Wrappers enforce a per-run limit; orchestrator sets it from
-                    # remaining global budget so spending control is centralized here.
-                    "--hard-cap", str(max(0.0, spend_cap_usd - actual_spend_total)),
-                    "--tpm", str(max_calls),
-                    "--temperature", "0",
-                    "--system", SYSTEM_PROMPT,
-                ]
-                shell(cmd)
+                # 1) call LLM for structured JSONL predictions. The runner
+                # enforces a per-run cap derived from the remaining global
+                # budget so spending control stays centralized here.
+                run_batch(
+                    model=model_id_run,
+                    input_path=gold_path,
+                    output_path=jsonl_preds,
+                    usage_path=usage_csv,
+                    dim=ds_dim,
+                    price_per_1k=price_per_1k,
+                    hard_cap=max(0.0, spend_cap_usd - actual_spend_total),
+                    tpm=max_calls,
+                    temperature=0.0,
+                    system=SYSTEM_PROMPT,
+                )
 
                 # 2) convert structured JSONL -> plain-text preds
-                shell([
-                    sys.executable, "convert_predictions.py",
-                    "--input",  str(jsonl_preds),
-                    "--output", str(preds_txt),
-                ])
+                convert_file(jsonl_preds, preds_txt)
 
                 # 3) evaluate
-                eval_proc = subprocess.run(
-                    [
-                        sys.executable,
-                        "eval.py",
-                        "--gold", str(gold_path),
-                        "--pred", str(preds_txt),
-                    ],
-                    capture_output=True,
-                    text=True,
-                )
-                if eval_proc.returncode:
-                    print(eval_proc.stderr, file=sys.stderr)
-                    sys.exit(eval_proc.returncode)
-
-                # parse metrics
                 try:
-                    norm_line  = next(l for l in eval_proc.stdout.splitlines() if "Normalized" in l)
-                    exact_line = next(l for l in eval_proc.stdout.splitlines() if "Exact-match" in l)
-                except StopIteration:
-                    print("Unexpected eval.py output:", file=sys.stderr)
-                    print(eval_proc.stdout, file=sys.stderr)
+                    metrics = score(gold_path, preds_txt)
+                except EvalError as exc:
+                    print(str(exc), file=sys.stderr)
                     sys.exit(1)
 
-                norm_acc  = float(norm_line.split()[-1])
-                exact_pct = float(exact_line.split("=")[-1].split("%")[0].strip())
+                norm_acc  = metrics["norm_hamming"]
+                exact_pct = metrics["exact_pct"]
 
                 # 4) read actual usage and compute this run's spend delta
                 usage_after_usd, usage_after_rows = read_usage_csv(usage_csv)

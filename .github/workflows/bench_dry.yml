@@ -23,13 +23,14 @@ jobs:
 
       - name: Orchestrator dry run
         run: |
-          python orchestrator.py \
+          python -m cabench run \
             --config bench.yaml \
             --dry-run \
             --data-dir ci_artifacts/data \
             --log-dir ci_artifacts/logs \
             --results-dir ci_artifacts/results \
-            --no-summary
+            --no-summary \
+            --no-report
 
       - name: Sanity-check artefacts
         run: |
@@ -38,7 +39,7 @@ jobs:
 
       - name: Generate report from dry-run outputs
         run: |
-          python report_results.py \
+          python -m cabench report \
             --scores ci_artifacts/results/scores.csv \
             --out ci_artifacts/results/report.txt
 

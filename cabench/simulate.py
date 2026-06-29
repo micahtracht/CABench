@@ -1,4 +1,4 @@
-from rules import Rule1D, Rule2D
+from cabench.rules import Rule1D, Rule2D
 from typing import List
 
 def step_1d(state: List[int], rule: Rule1D) -> List[int]:

@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 """
-convert_predictions.py
+cabench.convert
 
 Convert structured-output JSONL (one JSON object per line, each with
 `{"answer": [0,1,0,…]}`) into a flat text file where every line is a binary string like `0100110`.
 
 Usage
 
-python convert_predictions.py \
+python -m cabench convert \
     --input  data/gpt4o_val_public.jsonl \
     --output data/gpt4o_val_public.predictions
 """
@@ -15,12 +15,12 @@ python convert_predictions.py \
 from __future__ import annotations
 import argparse, json, pathlib, sys
 from typing import List
-from contracts import (
+from cabench.contracts import (
     PREDS_TEXT_SCHEMA_NAME,
     PREDS_TEXT_SCHEMA_VERSION,
     write_schema_manifest,
 )
-from json_extract import extract_first_json_object
+from cabench.json_extract import extract_first_json_object
 
 def json_to_bits(obj: dict) -> str:
     """
@@ -84,11 +84,11 @@ def convert_file(in_path: pathlib.Path, out_path: pathlib.Path) -> None:
     print(f"wrote {n_ok} predictions. {n_bad} lines had errors → blank")
 
  
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", type=pathlib.Path, required=True, help="JSONL file")
     ap.add_argument("--output", type=pathlib.Path, required=True, help="plain-text predictions")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
     convert_file(args.input, args.output)
 
 

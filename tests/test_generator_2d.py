@@ -1,5 +1,5 @@
-from generate import CAProblemGenerator2D, Problem2D
-from rules import Rule2D
+from cabench.generate import CAProblemGenerator2D, Problem2D
+from cabench.rules import Rule2D
 
 
 def test_deterministic_seed_2d():

@@ -1,5 +1,5 @@
 import json
-from generate_dataset import main_2d as gen2d_cli
+from cabench.dataset import main_2d as gen2d_cli
 import pathlib
 
 

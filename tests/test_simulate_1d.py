@@ -1,7 +1,7 @@
 import pytest
-from simulate import simulate_2d, step_1d, simulate, step_2d
-from rules import Rule1D, Rule2D
-from simulate import _neighbor_sum
+from cabench.simulate import simulate_2d, step_1d, simulate, step_2d
+from cabench.rules import Rule1D, Rule2D
+from cabench.simulate import _neighbor_sum
 
 def test_step_identity_rule0():
     rule_0 = Rule1D("000000") # this should make every cell go to 0

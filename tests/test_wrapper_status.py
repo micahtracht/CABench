@@ -2,8 +2,7 @@ import types
 
 import pytest
 
-import wrappers.run_llm_json as w1
-import wrappers.run_llm_json_2d as w2
+import cabench.llm.runner as runner
 
 
 class _Usage:
@@ -41,70 +40,65 @@ class _FakeClient:
         return event
 
 
-@pytest.mark.parametrize("mod", [w1, w2])
-def test_chat_json_status_success(mod, monkeypatch):
-    monkeypatch.setattr(mod, "wait_one_second", lambda: None)
-    monkeypatch.setattr(mod.time, "sleep", lambda _: None)
-    monkeypatch.setattr(mod, "log_response", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mod, "client", _FakeClient([_Resp('{"answer":[0,1]}')]))
+def test_chat_json_status_success(monkeypatch):
+    monkeypatch.setattr(runner, "wait_one_second", lambda: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda _: None)
+    monkeypatch.setattr(runner, "log_response", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "client", _FakeClient([_Resp('{"answer":[0,1]}')]))
 
-    data, usage, _raw = mod.chat_json("m", "p")
+    data, usage, _raw = runner.chat_json("m", "p")
     assert data["status"] == "success"
     assert data["attempts"] == 1
     assert usage["total"] == 15
 
 
-@pytest.mark.parametrize("mod", [w1, w2])
-def test_chat_json_status_truncated(mod, monkeypatch):
-    monkeypatch.setattr(mod, "wait_one_second", lambda: None)
-    monkeypatch.setattr(mod.time, "sleep", lambda _: None)
-    monkeypatch.setattr(mod, "log_response", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mod, "client", _FakeClient([_Resp('{"answer":[1]}', "length")]))
+def test_chat_json_status_truncated(monkeypatch):
+    monkeypatch.setattr(runner, "wait_one_second", lambda: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda _: None)
+    monkeypatch.setattr(runner, "log_response", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "client", _FakeClient([_Resp('{"answer":[1]}', "length")]))
 
-    data, _usage, _raw = mod.chat_json("m", "p")
+    data, _usage, _raw = runner.chat_json("m", "p")
     assert data["status"] == "truncated"
     assert data["finish_reason"] == "length"
 
 
-@pytest.mark.parametrize("mod", [w1, w2])
-def test_chat_json_parse_retry_then_success(mod, monkeypatch):
-    monkeypatch.setattr(mod, "wait_one_second", lambda: None)
-    monkeypatch.setattr(mod.time, "sleep", lambda _: None)
-    monkeypatch.setattr(mod, "log_response", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mod, "MAX_SAMPLE_ATTEMPTS", 3)
+def test_chat_json_parse_retry_then_success(monkeypatch):
+    monkeypatch.setattr(runner, "wait_one_second", lambda: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda _: None)
+    monkeypatch.setattr(runner, "log_response", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "MAX_SAMPLE_ATTEMPTS", 3)
     monkeypatch.setattr(
-        mod,
+        runner,
         "client",
         _FakeClient([_Resp("not json"), _Resp('{"final_state":[1,0]}')]),
     )
 
-    data, _usage, _raw = mod.chat_json("m", "p")
+    data, _usage, _raw = runner.chat_json("m", "p")
     assert data["status"] == "success"
     assert data["attempts"] == 2
     assert data["answer"] == [1, 0]
 
 
-@pytest.mark.parametrize("mod", [w1, w2])
-def test_chat_json_invalid_after_exhausting_attempts(mod, monkeypatch):
-    monkeypatch.setattr(mod, "wait_one_second", lambda: None)
-    monkeypatch.setattr(mod.time, "sleep", lambda _: None)
-    monkeypatch.setattr(mod, "log_response", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mod, "MAX_SAMPLE_ATTEMPTS", 2)
-    monkeypatch.setattr(mod, "client", _FakeClient([_Resp("bad"), _Resp("still bad")]))
+def test_chat_json_invalid_after_exhausting_attempts(monkeypatch):
+    monkeypatch.setattr(runner, "wait_one_second", lambda: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda _: None)
+    monkeypatch.setattr(runner, "log_response", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "MAX_SAMPLE_ATTEMPTS", 2)
+    monkeypatch.setattr(runner, "client", _FakeClient([_Resp("bad"), _Resp("still bad")]))
 
-    data, _usage, _raw = mod.chat_json("m", "p")
+    data, _usage, _raw = runner.chat_json("m", "p")
     assert data["status"] == "invalid"
     assert data["attempts"] == 2
     assert data["answer"] == []
 
 
-@pytest.mark.parametrize("mod", [w1, w2])
-def test_chat_json_error_status_on_exception(mod, monkeypatch):
-    monkeypatch.setattr(mod, "wait_one_second", lambda: None)
-    monkeypatch.setattr(mod.time, "sleep", lambda _: None)
-    monkeypatch.setattr(mod, "log_response", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(mod, "client", _FakeClient([RuntimeError("boom")]))
+def test_chat_json_error_status_on_exception(monkeypatch):
+    monkeypatch.setattr(runner, "wait_one_second", lambda: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda _: None)
+    monkeypatch.setattr(runner, "log_response", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(runner, "client", _FakeClient([RuntimeError("boom")]))
 
-    data, _usage, _raw = mod.chat_json("m", "p")
+    data, _usage, _raw = runner.chat_json("m", "p")
     assert data["status"] == "error"
     assert data["error_type"] == "RuntimeError"

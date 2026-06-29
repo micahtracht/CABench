@@ -1,13 +1,11 @@
 import csv
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
-import orchestrator
-from contracts import USAGE_COLUMNS
-from convert_predictions import convert_file
+import cabench.orchestrator as orchestrator
+from cabench.contracts import USAGE_COLUMNS
 
 
 def _write_dataset(path: Path, *, target: str = "00") -> None:
@@ -36,63 +34,41 @@ def _write_config(path: Path, dataset_path: Path, model_ids: list[str]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _fake_eval_run(cmd, capture_output=False, text=False, check=False):
-    if isinstance(cmd, list) and len(cmd) >= 2 and cmd[1] == "eval.py":
-        return SimpleNamespace(
-            returncode=0,
-            stdout=(
-                "-Evaluated 1 cases\n"
-                "-Normalized Hamming accuracy: 1.0000\n"
-                "-Exact-match accuracy: 1/1 = 100.00%\n"
-            ),
-            stderr="",
-        )
-    raise AssertionError(f"Unexpected subprocess.run call in test: {cmd}")
+def _fake_run_batch_factory(cost_by_model: dict[str, float], *, assert_fresh=False):
+    """Stand in for the in-process LLM runner: write a prediction and a usage row."""
+
+    def _run_batch(*, model, output_path, usage_path, **_kwargs):
+        out_jsonl = Path(output_path)
+        usage_csv = Path(usage_path)
+        if assert_fresh:
+            assert not out_jsonl.exists()
+            assert not usage_csv.exists()
+
+        out_jsonl.parent.mkdir(parents=True, exist_ok=True)
+        usage_csv.parent.mkdir(parents=True, exist_ok=True)
+        out_jsonl.write_text('{"answer":[0,0]}\n', encoding="utf-8")
+
+        exists = usage_csv.exists() and usage_csv.stat().st_size > 0
+        with usage_csv.open("a", newline="", encoding="utf-8") as fp:
+            w = csv.writer(fp)
+            if not exists:
+                w.writerow(USAGE_COLUMNS)
+            w.writerow(
+                [
+                    "2026-01-01T00:00:00Z",
+                    model,
+                    "10",
+                    "10",
+                    "20",
+                    f"{cost_by_model.get(model, 0.01):.5f}",
+                ]
+            )
+        return {"success": 1, "invalid": 0, "error": 0, "truncated": 0}
+
+    return _run_batch
 
 
-def _shell_factory(cost_by_model: dict[str, float], *, assert_fresh=False):
-    def _shell(cmd):
-        if len(cmd) >= 4 and cmd[1] == "-m" and cmd[2].startswith("wrappers.run_llm_json"):
-            model = cmd[cmd.index("--model") + 1]
-            out_jsonl = Path(cmd[cmd.index("--output") + 1])
-            usage_csv = Path(cmd[cmd.index("--usage") + 1])
-            if assert_fresh:
-                assert not out_jsonl.exists()
-                assert not usage_csv.exists()
-
-            out_jsonl.parent.mkdir(parents=True, exist_ok=True)
-            usage_csv.parent.mkdir(parents=True, exist_ok=True)
-            out_jsonl.write_text('{"answer":[0,0]}\n', encoding="utf-8")
-
-            exists = usage_csv.exists() and usage_csv.stat().st_size > 0
-            with usage_csv.open("a", newline="", encoding="utf-8") as fp:
-                w = csv.writer(fp)
-                if not exists:
-                    w.writerow(USAGE_COLUMNS)
-                w.writerow(
-                    [
-                        "2026-01-01T00:00:00Z",
-                        model,
-                        "10",
-                        "10",
-                        "20",
-                        f"{cost_by_model.get(model, 0.01):.5f}",
-                    ]
-                )
-            return
-
-        if len(cmd) >= 2 and Path(cmd[1]).name == "convert_predictions.py":
-            in_path = Path(cmd[cmd.index("--input") + 1])
-            out_path = Path(cmd[cmd.index("--output") + 1])
-            convert_file(in_path, out_path)
-            return
-
-        raise AssertionError(f"Unexpected shell call in test: {cmd}")
-
-    return _shell
-
-
-def test_orchestrator_dry_run_skips_shell_and_eval(tmp_path: Path, monkeypatch):
+def test_orchestrator_dry_run_skips_runner_and_eval(tmp_path: Path, monkeypatch):
     dataset_path = tmp_path / "gold.jsonl"
     cfg_path = tmp_path / "bench.yaml"
     data_dir = tmp_path / "data"
@@ -102,8 +78,16 @@ def test_orchestrator_dry_run_skips_shell_and_eval(tmp_path: Path, monkeypatch):
     _write_config(cfg_path, dataset_path, ["m1"])
 
     monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
-    monkeypatch.setattr(orchestrator, "shell", lambda _cmd: (_ for _ in ()).throw(AssertionError("shell should not run")))
-    monkeypatch.setattr(orchestrator.subprocess, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("eval should not run")))
+    monkeypatch.setattr(
+        orchestrator,
+        "run_batch",
+        lambda **_k: (_ for _ in ()).throw(AssertionError("run_batch should not run")),
+    )
+    monkeypatch.setattr(
+        orchestrator,
+        "score",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("score should not run")),
+    )
 
     orchestrator.run(
         cfg_path=cfg_path,
@@ -130,8 +114,7 @@ def test_orchestrator_master_usage_dedupes_on_rerun(tmp_path: Path, monkeypatch)
     _write_config(cfg_path, dataset_path, ["m1"])
 
     monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
-    monkeypatch.setattr(orchestrator, "shell", _shell_factory({"m1": 0.01}))
-    monkeypatch.setattr(orchestrator.subprocess, "run", _fake_eval_run)
+    monkeypatch.setattr(orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.01}))
 
     orchestrator.run(cfg_path, data_dir=data_dir, log_dir=log_dir, results_dir=results_dir, summarize=False)
     orchestrator.run(cfg_path, data_dir=data_dir, log_dir=log_dir, results_dir=results_dir, summarize=False)
@@ -164,8 +147,7 @@ def test_orchestrator_force_preds_restarts_usage_and_preds(tmp_path: Path, monke
         w.writerow(["old", "m1", "1", "1", "2", "0.50000"])
 
     monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
-    monkeypatch.setattr(orchestrator, "shell", _shell_factory({"m1": 0.01}, assert_fresh=True))
-    monkeypatch.setattr(orchestrator.subprocess, "run", _fake_eval_run)
+    monkeypatch.setattr(orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.01}, assert_fresh=True))
 
     orchestrator.run(
         cfg_path=cfg_path,
@@ -192,8 +174,7 @@ def test_orchestrator_budget_cap_uses_actual_usage(tmp_path: Path, monkeypatch):
 
     monkeypatch.setattr(orchestrator, "HARD_SPEND_CEILING", 0.05)
     monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
-    monkeypatch.setattr(orchestrator, "shell", _shell_factory({"m1": 0.03, "m2": 0.03}))
-    monkeypatch.setattr(orchestrator.subprocess, "run", _fake_eval_run)
+    monkeypatch.setattr(orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.03, "m2": 0.03}))
 
     with pytest.raises(SystemExit) as exc:
         orchestrator.run(
@@ -216,9 +197,9 @@ def test_orchestrator_convert_and_eval_integration(tmp_path: Path, monkeypatch):
     _write_config(cfg_path, dataset_path, ["m1"])
 
     monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
-    monkeypatch.setattr(orchestrator, "shell", _shell_factory({"m1": 0.01}))
+    # Only the LLM call is faked; convert + score run for real in-process.
+    monkeypatch.setattr(orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.01}))
 
-    # Use real subprocess.run for eval.py invocation.
     orchestrator.run(
         cfg_path=cfg_path,
         data_dir=data_dir,

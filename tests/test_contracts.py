@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from contracts import (
+from cabench.contracts import (
     SCORES_COLUMNS,
     SCORES_SCHEMA_NAME,
     SCORES_SCHEMA_VERSION,

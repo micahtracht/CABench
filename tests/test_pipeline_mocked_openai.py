@@ -1,22 +1,10 @@
 import csv
 import json
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-import orchestrator
-import wrappers.run_llm_json as run1d
-import wrappers.run_llm_json_2d as run2d
-import convert_predictions
-
-
-def _run_main(module, argv: list[str], prog: str) -> None:
-    old = sys.argv
-    try:
-        sys.argv = [prog, *argv]
-        module.main()
-    finally:
-        sys.argv = old
+import cabench.orchestrator as orchestrator
+import cabench.llm.runner as runner
 
 
 class _FakeUsage:
@@ -88,28 +76,14 @@ def test_orchestrator_full_pipeline_with_mocked_openai(tmp_path: Path, monkeypat
         encoding="utf-8",
     )
 
+    # The runner is exercised in-process; only the OpenAI client and the
+    # rate-limit sleeps are faked.
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setattr(run1d, "OpenAI", _FakeOpenAI)
-    monkeypatch.setattr(run2d, "OpenAI", _FakeOpenAI)
-    monkeypatch.setattr(run1d, "wait_one_second", lambda: None)
-    monkeypatch.setattr(run2d, "wait_one_second", lambda: None)
-    monkeypatch.setattr(run1d.time, "sleep", lambda _s: None)
-    monkeypatch.setattr(run2d.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(runner, "OpenAI", _FakeOpenAI)
+    monkeypatch.setattr(runner, "client", None)
+    monkeypatch.setattr(runner, "wait_one_second", lambda: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
     monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
-
-    def fake_shell(cmd):
-        if len(cmd) >= 3 and cmd[1:3] == ["-m", "wrappers.run_llm_json"]:
-            _run_main(run1d, cmd[3:], "wrappers.run_llm_json")
-            return
-        if len(cmd) >= 3 and cmd[1:3] == ["-m", "wrappers.run_llm_json_2d"]:
-            _run_main(run2d, cmd[3:], "wrappers.run_llm_json_2d")
-            return
-        if len(cmd) >= 2 and Path(cmd[1]).name == "convert_predictions.py":
-            _run_main(convert_predictions, cmd[2:], "convert_predictions.py")
-            return
-        raise AssertionError(f"Unexpected command in fake shell: {cmd}")
-
-    monkeypatch.setattr(orchestrator, "shell", fake_shell)
 
     orchestrator.run(
         cfg_path=cfg_path,

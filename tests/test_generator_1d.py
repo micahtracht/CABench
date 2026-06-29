@@ -1,6 +1,6 @@
-from generate import ECAProblemGenerator
-from generate import Problem1D
-from rules import Rule1D
+from cabench.generate import ECAProblemGenerator
+from cabench.generate import Problem1D
+from cabench.rules import Rule1D
 
 def test_deterministic_seed():
     gen1 = ECAProblemGenerator(state_size=8, seed=0, density=0.5)

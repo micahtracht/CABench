@@ -2,8 +2,8 @@ import csv
 import json
 from pathlib import Path
 
-from contracts import RUN_METADATA_SCHEMA_NAME, RUN_METADATA_SCHEMA_VERSION, SCORES_COLUMNS, USAGE_COLUMNS
-from migrate_artifacts import migrate_run_metadata, migrate_scores_csv, migrate_usage_csv
+from cabench.contracts import RUN_METADATA_SCHEMA_NAME, RUN_METADATA_SCHEMA_VERSION, SCORES_COLUMNS, USAGE_COLUMNS
+from cabench.migrate import migrate_run_metadata, migrate_scores_csv, migrate_usage_csv
 
 
 def test_migrate_scores_csv_legacy_header(tmp_path: Path):

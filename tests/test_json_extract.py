@@ -1,4 +1,4 @@
-from json_extract import extract_first_json_object
+from cabench.json_extract import extract_first_json_object
 
 
 def test_extract_exact_json_object():

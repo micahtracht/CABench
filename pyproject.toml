@@ -30,22 +30,7 @@ dev = [
 [project.scripts]
 cabench = "cabench.cli:main"
 
-[tool.setuptools]
-py-modules = [
-  "contracts",
-  "convert_predictions",
-  "eval",
-  "generate",
-  "generate_dataset",
-  "json_extract",
-  "migrate_artifacts",
-  "orchestrator",
-  "report_results",
-  "rules",
-  "simulate",
-]
-
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["cabench*", "wrappers*"]
+include = ["cabench*"]
 namespaces = true

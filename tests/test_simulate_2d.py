@@ -1,5 +1,5 @@
-from simulate import step_2d, simulate_2d, _neighbor_sum
-from rules import Rule2D
+from cabench.simulate import step_2d, simulate_2d, _neighbor_sum
+from cabench.rules import Rule2D
 
 
 def test_step2d_zero_rule_blanket():

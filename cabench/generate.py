@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 import numpy as np
 from typing import List, Sequence, Tuple
-from rules import Rule1D, Rule2D
-from simulate import step_1d, step_2d
+from cabench.rules import Rule1D, Rule2D
+from cabench.simulate import step_1d, step_2d
 @dataclass
 class Problem1D:
     '''

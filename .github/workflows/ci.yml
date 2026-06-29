@@ -33,14 +33,15 @@ jobs:
       - name: Dry-run smoke + generate report
         run: |
           mkdir -p ci_artifacts
-          python orchestrator.py \
+          python -m cabench run \
             --config bench.yaml \
             --dry-run \
             --data-dir ci_artifacts/data \
             --log-dir ci_artifacts/logs \
             --results-dir ci_artifacts/results \
-            --no-summary
-          python report_results.py \
+            --no-summary \
+            --no-report
+          python -m cabench report \
             --scores ci_artifacts/results/scores.csv \
             --out ci_artifacts/results/report.txt
 

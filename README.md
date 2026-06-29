@@ -16,16 +16,18 @@ LLMs still fail to reason spatially in an effective way. Furthermore, coming up 
 
 ## Repo Layout
 
-- `orchestrator.py`: one-command benchmark runner (generate -> predict -> convert -> eval -> log)
+All code lives in the installable `cabench` package, driven by the single `cabench` CLI (`python -m cabench`).
+
+- `cabench/cli.py`: the `cabench` CLI — `run`, `report`, `list-presets`, `generate`, `eval`, `convert`, `migrate`
+- `cabench/orchestrator.py`: one-command benchmark runner (generate -> predict -> convert -> eval -> log), in-process
 - `bench.yaml`: dataset/model configuration
-- `generate_dataset.py`: generate 1D/2D CA datasets (JSONL)
-- `generate.py`, `rules.py`, `simulate.py`: CA problem/rule/simulation logic
-- `wrappers/run_llm_json.py`: 1D OpenAI runner with retries/status logging
-- `wrappers/run_llm_json_2d.py`: 2D OpenAI runner with retries/status logging
-- `convert_predictions.py`: structured model JSONL -> flattened `.preds`
-- `eval.py`: normalized Hamming + exact-match scoring
-- `report_results.py`: per-model and per-dataset comparison reports
-- `contracts.py`: canonical artifact schema names/versions
+- `cabench/dataset.py`: generate 1D/2D CA datasets (JSONL)
+- `cabench/generate.py`, `cabench/rules.py`, `cabench/simulate.py`: CA problem/rule/simulation logic
+- `cabench/llm/runner.py`: unified 1D/2D OpenAI runner with retries/status logging
+- `cabench/convert.py`: structured model JSONL -> flattened `.preds`
+- `cabench/scoring.py`: normalized Hamming + exact-match scoring
+- `cabench/report.py`: per-model and per-dataset comparison reports
+- `cabench/contracts.py`: canonical artifact schema names/versions
 - `results/`: benchmark outputs (`scores.csv`, `run_metadata.jsonl`)
 - `logs/`: per-call usage and master usage ledger
 - `tests/`: unit + orchestration + mocked end-to-end tests
@@ -51,8 +53,9 @@ cp .env.example .env
 export OPENAI_API_KEY=sk-...
 
 # run the default benchmark
-python orchestrator.py
+python -m cabench run
 ```
+The `cabench` console script is also installed (`pip install -e .`), so `cabench run` works too.
 CABench automatically loads a repo-local `.env` file if present and will not override variables you already exported in your shell. `.env` is gitignored; `.env.example` is the committed template.
 
 Expected artifacts:
@@ -70,12 +73,12 @@ Expected artifacts:
 
  - *.schema.json sidecars – schema/version manifests for key artifacts
 
-## Orchestrator CLI
+## Run CLI
 
-`orchestrator.py` is the primary interface.
+`cabench run` is the primary interface.
 
 ```bash
-python orchestrator.py \
+python -m cabench run \
   --config bench.yaml \
   --models gpt-4.1-mini,gpt-4.1 \
   --datasets quick1d_32,quick2d_16x16 \
@@ -124,22 +127,22 @@ models:
 
 - Fast smoke test (no API):
 ```bash
-python orchestrator.py --dry-run --numquestions 8 --models gpt-4.1-mini
+python -m cabench run --dry-run --numquestions 8 --models gpt-4.1-mini
 ```
 
 - Run only 2D datasets:
 ```bash
-python orchestrator.py --dim 2
+python -m cabench run --dim 2
 ```
 
 - Run one model on one dataset:
 ```bash
-python orchestrator.py --model-id gpt-4.1-mini --datasets quick1d_32
+python -m cabench run --model-id gpt-4.1-mini --datasets quick1d_32
 ```
 
 - Keep outputs separate per experiment:
 ```bash
-python orchestrator.py --data-dir runs/r1/data --log-dir runs/r1/logs --results-dir runs/r1/results
+python -m cabench run --data-dir runs/r1/data --log-dir runs/r1/logs --results-dir runs/r1/results
 ```
 
 ## Results
@@ -147,7 +150,7 @@ python orchestrator.py --data-dir runs/r1/data --log-dir runs/r1/logs --results-
 Generate comparison tables from accumulated scores:
 
 ```bash
-python report_results.py --scores results/scores.csv --out results/report.txt
+python -m cabench report --scores results/scores.csv --out results/report.txt
 ```
 
 Report includes:
@@ -156,12 +159,12 @@ Report includes:
 
 ## Schema Evolution & Migration
 
-Schema/version contracts are defined in `contracts.py` and governed by `SCHEMA_POLICY.md`.
+Schema/version contracts are defined in `cabench/contracts.py` and governed by `SCHEMA_POLICY.md`.
 
 If you have legacy artifacts, migrate them before running strict schema writers:
 
 ```bash
-python migrate_artifacts.py --results-dir results --log-dir logs
+python -m cabench migrate --results-dir results --log-dir logs
 ```
 
 This upgrades/normalizes:

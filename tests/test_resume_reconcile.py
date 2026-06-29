@@ -2,7 +2,7 @@ import csv
 import json
 from pathlib import Path
 
-from wrappers.run_llm_json import _reconcile_resume_state
+from cabench.llm.runner import _reconcile_resume_state
 
 
 def _usage_row(usd: str = "0.01000"):

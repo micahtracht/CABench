@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 from typing import Callable
 
-from contracts import (
+from cabench.contracts import (
     RUN_METADATA_SCHEMA_NAME,
     RUN_METADATA_SCHEMA_VERSION,
     SCORES_COLUMNS,
@@ -182,8 +182,8 @@ def _run_migration(name: str, fn: Callable[[Path], bool], path: Path) -> tuple[b
     return changed, f"{name}: {'updated' if changed else 'ok'} ({path})"
 
 
-def main() -> None:
-    args = build_parser().parse_args()
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
 
     scores_path = args.scores or (args.results_dir / "scores.csv")
     metadata_path = args.run_metadata or (args.results_dir / "run_metadata.jsonl")

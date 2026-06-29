@@ -1,18 +1,18 @@
 """
-generate_dataset.py
+cabench.dataset
 
 Create a JSONL file of 1-D or 2-D outer-totalistic CA tasks.
 
 Example (1-D)
 -------
-python generate_dataset.py --mode 1d \
+python -m cabench generate --mode 1d \
        --n 2048 --size 32 --timesteps 4 \
        --density 0.4 --seed 123 \
        --outfile data/train1d.jsonl
 
 Example (2-D)
 -------
-python generate_dataset.py --mode 2d \
+python -m cabench generate --mode 2d \
        --n 128 --height 16 --width 16 --timesteps 1 \
        --density 0.5 --seed 42 \
        --outfile data/val2d_public.jsonl
@@ -22,8 +22,8 @@ from __future__ import annotations
 import argparse, json, pathlib, sys
 from typing import List
 import numpy as np
-from generate import CAProblemGenerator2D, ECAProblemGenerator, Problem1D, Problem2D
-from simulate import simulate, simulate_2d
+from cabench.generate import CAProblemGenerator2D, ECAProblemGenerator, Problem1D, Problem2D
+from cabench.simulate import simulate, simulate_2d
 
 def problem_to_jsonl(problem: Problem1D) -> str:
     """

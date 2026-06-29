@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from report_results import (
+from cabench.report import (
     aggregate_by_model,
     load_scores,
     load_run_metadata,

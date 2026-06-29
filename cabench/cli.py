@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-import orchestrator
-import report_results
+from cabench import convert, dataset, migrate, orchestrator, report, scoring
 
 
 DEFAULT_CONFIG = Path("bench.yaml")
@@ -85,9 +85,9 @@ def _resolve_run_selection(
 def _latest_report_text(results_dir: Path) -> str:
     scores_path = results_dir / "scores.csv"
     metadata_path = results_dir / "run_metadata.jsonl"
-    score_rows = report_results.load_scores_if_present(scores_path)
-    metadata_rows = report_results.load_run_metadata(metadata_path)
-    return report_results.render_report(score_rows, metadata_rows, latest_only=True)
+    score_rows = report.load_scores_if_present(scores_path)
+    metadata_rows = report.load_run_metadata(metadata_path)
+    return report.render_report(score_rows, metadata_rows, latest_only=True)
 
 
 def _write_latest_report(results_dir: Path, report_text: str) -> Path:
@@ -141,12 +141,12 @@ def report_command(args: argparse.Namespace) -> int:
     scores_path = args.scores or (args.results_dir / "scores.csv")
     metadata_path = args.metadata or (args.results_dir / "run_metadata.jsonl")
     score_rows = (
-        report_results.load_scores_if_present(scores_path)
+        report.load_scores_if_present(scores_path)
         if args.latest_only
-        else report_results.load_scores(scores_path)
+        else report.load_scores(scores_path)
     )
-    metadata_rows = report_results.load_run_metadata(metadata_path)
-    report_text = report_results.render_report(
+    metadata_rows = report.load_run_metadata(metadata_path)
+    report_text = report.render_report(
         score_rows,
         metadata_rows,
         latest_only=args.latest_only,
@@ -208,10 +208,32 @@ def build_parser() -> argparse.ArgumentParser:
     list_p.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help="Path to bench.yaml")
     list_p.set_defaults(func=list_presets_command)
 
+    # The PASSTHROUGH tools are registered for discoverability; main()
+    # forwards their raw args to each tool's own parser before argparse runs.
+    sub.add_parser("generate", help="Generate a 1-D/2-D CA dataset (see --mode).", add_help=False)
+    sub.add_parser("eval", help="Score predictions against a gold JSONL.", add_help=False)
+    sub.add_parser("convert", help="Flatten structured JSONL predictions to bit strings.", add_help=False)
+    sub.add_parser("migrate", help="Migrate legacy artifacts to canonical schemas.", add_help=False)
+
     return parser
 
 
+# Subcommands whose flags are owned by the underlying tool's own argument
+# parser. main() dispatches these before argparse so their options are not
+# intercepted by the top-level parser.
+PASSTHROUGH = {
+    "generate": dataset.dispatch_main,
+    "eval": scoring.main,
+    "convert": convert.main,
+    "migrate": migrate.main,
+}
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] in PASSTHROUGH:
+        PASSTHROUGH[argv[0]](argv[1:])
+        return 0
     parser = build_parser()
     args = parser.parse_args(argv)
     return int(args.func(args))

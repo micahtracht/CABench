@@ -1,5 +1,5 @@
 import pytest
-from rules import Rule1D, Rule2D
+from cabench.rules import Rule1D, Rule2D
 
 def test_from_int_roundtrip():
     for code in (0, 1, 17, 42, 63):

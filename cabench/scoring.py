@@ -44,16 +44,25 @@ def normalized_hamming_accuracy(correct: str, response: str) -> float:
     
     return 1.0 - (hamming_distance/max(len(correct), len(response))) # in [0, 1]
 
-def evaluate(gold_path: pathlib.Path, pred_path: pathlib.Path) -> None:
+
+class EvalError(ValueError):
+    """Raised when gold/prediction inputs cannot be scored."""
+
+
+def score(gold_path: pathlib.Path, pred_path: pathlib.Path) -> dict:
+    """
+    Score predictions against gold and return aggregate metrics.
+
+    Returns a dict with keys: total, norm_hamming, exact_match, exact_pct, invalid.
+    Raises EvalError on length mismatch or malformed gold targets.
+    """
     gold_lines = gold_path.read_text(encoding="utf-8").splitlines()
     pred_lines = pred_path.read_text(encoding="utf-8").splitlines()
 
     if len(gold_lines) != len(pred_lines):
-        print(
-            f"Mismatch: {len(pred_lines)} predictions vs {len(gold_lines)} gold.",
-            file=sys.stderr,
+        raise EvalError(
+            f"Mismatch: {len(pred_lines)} predictions vs {len(gold_lines)} gold."
         )
-        sys.exit(1)
 
     total = len(gold_lines)
     sum_acc = 0.0
@@ -65,8 +74,7 @@ def evaluate(gold_path: pathlib.Path, pred_path: pathlib.Path) -> None:
         try:
             gold_flat = _flatten(correct_obj)
         except ValueError as e:
-            print(f"Gold line {idx}: {e}", file=sys.stderr)
-            sys.exit(1)
+            raise EvalError(f"Gold line {idx}: {e}") from e
 
         try:
             pred_flat = _flatten(pred_raw.strip())     # pred already string
@@ -79,12 +87,34 @@ def evaluate(gold_path: pathlib.Path, pred_path: pathlib.Path) -> None:
         if pred_flat == gold_flat:
             exact_match += 1
 
-    if invalid:
-        print(f"-Found {invalid} invalid prediction lines (non-binary symbols).", file=sys.stderr)
+    return {
+        "total": total,
+        "norm_hamming": sum_acc / total,
+        "exact_match": exact_match,
+        "exact_pct": (exact_match / total) * 100,
+        "invalid": invalid,
+    }
 
-    print(f"-Evaluated {total} cases")
-    print(f"-Normalized Hamming accuracy: {sum_acc / total:.4f}")
-    print(f"-Exact-match accuracy: {exact_match}/{total} = {(exact_match / total) * 100:.2f}%")
+
+def evaluate(gold_path: pathlib.Path, pred_path: pathlib.Path) -> None:
+    try:
+        result = score(gold_path, pred_path)
+    except EvalError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(1)
+
+    if result["invalid"]:
+        print(
+            f"-Found {result['invalid']} invalid prediction lines (non-binary symbols).",
+            file=sys.stderr,
+        )
+
+    print(f"-Evaluated {result['total']} cases")
+    print(f"-Normalized Hamming accuracy: {result['norm_hamming']:.4f}")
+    print(
+        f"-Exact-match accuracy: {result['exact_match']}/{result['total']} = "
+        f"{result['exact_pct']:.2f}%"
+    )
     sys.exit(0)
 
 def build_parser() -> argparse.ArgumentParser:
