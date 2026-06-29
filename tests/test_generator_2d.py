@@ -31,6 +31,17 @@ def test_batch_nontrivial_2d():
     assert not any(gen.is_trivial(p) for p in batch)
 
 
+def test_is_trivial_full_horizon_oscillator_2d():
+    # 9 ones then 9 zeros => new = 1 - self regardless of neighbors: a global
+    # inverter with period 2. is_trivial must use the full timestep horizon.
+    gen = CAProblemGenerator2D(2, 2, seed=0)
+    invert = Rule2D("1" * 9 + "0" * 9)
+    grid = [[1, 0], [0, 1]]
+
+    assert gen.is_trivial(Problem2D(grid, invert, timesteps=2))
+    assert not gen.is_trivial(Problem2D(grid, invert, timesteps=1))
+
+
 def test_generate_prompt_contains_grid_and_json_2d():
     gen = CAProblemGenerator2D(3, 3, seed=2, density=0.5)
     prob = gen.generate()

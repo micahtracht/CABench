@@ -65,22 +65,33 @@ def score(gold_path: pathlib.Path, pred_path: pathlib.Path) -> dict:
         )
 
     total = len(gold_lines)
+    if total == 0:
+        raise EvalError("no rows to score (empty gold/prediction files).")
+
     sum_acc = 0.0
     exact_match = 0
     invalid = 0
 
     for idx, (gline, pred_raw) in enumerate(zip(gold_lines, pred_lines), 1):
-        correct_obj = json.loads(gline)["target"]
+        try:
+            correct_obj = json.loads(gline)["target"]
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            raise EvalError(f"Gold line {idx}: invalid JSON or missing 'target'") from e
         try:
             gold_flat = _flatten(correct_obj)
         except ValueError as e:
             raise EvalError(f"Gold line {idx}: {e}") from e
 
-        try:
-            pred_flat = _flatten(pred_raw.strip())     # pred already string
-        except ValueError:
+        pred_str = pred_raw.strip()
+        if pred_str == "":
             invalid += 1
-            pred_flat = ""                             # treat as fully wrong
+            pred_flat = ""                             # blank/missing prediction
+        else:
+            try:
+                pred_flat = _flatten(pred_str)         # pred already string
+            except ValueError:
+                invalid += 1
+                pred_flat = ""                         # treat as fully wrong
 
         acc = normalized_hamming_accuracy(gold_flat, pred_flat)
         sum_acc += acc
@@ -105,7 +116,7 @@ def evaluate(gold_path: pathlib.Path, pred_path: pathlib.Path) -> None:
 
     if result["invalid"]:
         print(
-            f"-Found {result['invalid']} invalid prediction lines (non-binary symbols).",
+            f"-Found {result['invalid']} invalid prediction lines (blank or non-binary symbols).",
             file=sys.stderr,
         )
 

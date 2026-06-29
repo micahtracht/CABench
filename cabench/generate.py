@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import numpy as np
 from typing import List, Sequence, Tuple
 from cabench.rules import Rule1D, Rule2D
-from cabench.simulate import step_1d, step_2d
+from cabench.simulate import simulate, simulate_2d
 @dataclass
 class Problem1D:
     '''
@@ -65,13 +65,17 @@ class CAProblemGenerator2D:
 
     def is_trivial(self, problem: Problem2D) -> bool:
         """
-        Return True if the problem is trivial: all cells dead, all alive, or
-        if one step leaves the grid unchanged.
+        Return True if the problem is trivial: all cells dead, all alive, or the
+        grid evolves back to its start over the problem's full timestep horizon
+        (so the answer is just a copy of the visible input).
         """
         flat = [cell for row in problem.start_grid for cell in row]
         if all(x == 0 for x in flat) or all(x == 1 for x in flat):
             return True
-        return step_2d(problem.start_grid, problem.rule) == problem.start_grid
+        return (
+            simulate_2d(problem.start_grid, problem.rule, problem.timesteps)
+            == problem.start_grid
+        )
 
     def generate_batch(
         self,
@@ -192,7 +196,9 @@ class ECAProblemGenerator:
         start_state = problem.start_state
         if all(x == 0 for x in start_state) or all(x == 1 for x in start_state): # prune all dead/all alive
             return True
-        if step_1d(start_state, problem.rule) == start_state: # state doesn't ever change
+        # Trivial if the state evolves back to its start over the full horizon
+        # (the answer would just be a copy of the visible input).
+        if simulate(start_state, problem.rule, problem.timesteps) == start_state:
             return True
         return False
     

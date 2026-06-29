@@ -20,7 +20,7 @@ from cabench.contracts import (
     PREDS_TEXT_SCHEMA_VERSION,
     write_schema_manifest,
 )
-from cabench.json_extract import extract_first_json_object
+from cabench.json_extract import extract_answer_json
 
 def json_to_bits(obj: dict) -> str:
     """
@@ -45,7 +45,10 @@ def json_to_bits(obj: dict) -> str:
 
     bits: List[str] = []
     _collect(obj["answer"], bits)
-    return "".join(bits)
+    flat = "".join(bits)
+    if not flat:
+        raise ValueError("empty 'answer'")
+    return flat
 
 
 def convert_file(in_path: pathlib.Path, out_path: pathlib.Path) -> None:
@@ -60,7 +63,7 @@ def convert_file(in_path: pathlib.Path, out_path: pathlib.Path) -> None:
                 continue
             try:
                 # Use the new function to extract the JSON object
-                obj = extract_first_json_object(line)
+                obj = extract_answer_json(line)
                 if obj is None:
                     raise ValueError("No JSON object found in line")
                 

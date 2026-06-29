@@ -31,7 +31,7 @@ from cabench.generate import (
     Problem2D,
 )
 from cabench.rules import Rule1D, Rule2D
-from cabench.json_extract import extract_first_json_object
+from cabench.json_extract import extract_answer_json
 from cabench.contracts import (
     PRED_JSONL_SCHEMA_NAME,
     PRED_JSONL_SCHEMA_VERSION,
@@ -257,7 +257,7 @@ def chat_json(
         total_usage["total"] += u.total_tokens
 
         finish_reason = resp.choices[0].finish_reason
-        parsed = extract_first_json_object(raw)
+        parsed = extract_answer_json(raw)
         if parsed is None or not any(k in parsed for k in REQUIRED_KEYS):
             last_error = "failed to parse JSON or missing answer/final_state key"
             if attempt < MAX_SAMPLE_ATTEMPTS:

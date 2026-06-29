@@ -51,6 +51,20 @@ def test_is_trivial_cases():
     assert not gen.is_trivial(nontrivial_problem)
 
 
+def test_is_trivial_full_horizon_oscillator():
+    # "111000" => new = 1 - self regardless of neighbors: a global inverter
+    # with period 2. is_trivial must judge over the full timestep horizon.
+    gen = ECAProblemGenerator(state_size=4, seed=0)
+    invert = Rule1D("111000")
+    state = [1, 0, 1, 0]
+
+    # returns to start after 2 steps -> trivial over a 2-step horizon
+    assert gen.is_trivial(Problem1D(state, invert, timesteps=2))
+    # a single step (or any odd horizon) flips it -> non-trivial
+    assert not gen.is_trivial(Problem1D(state, invert, timesteps=1))
+    assert not gen.is_trivial(Problem1D(state, invert, timesteps=3))
+
+
 def test_generate_prompt_contains_start_and_json():
     gen = ECAProblemGenerator(state_size=4, seed=1, density=0.5)
     prob = gen.generate(timesteps=1)
