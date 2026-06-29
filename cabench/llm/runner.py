@@ -10,6 +10,7 @@ dataset record is turned into a prompt.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import csv
 import json
 import os
@@ -43,6 +44,15 @@ from cabench.contracts import (
 )
 
 load_project_env()
+
+
+class RunnerError(Exception):
+    """Raised for unrecoverable runner/config/data errors. Caught at the CLI boundary."""
+
+
+class SpendCapError(RunnerError):
+    """Raised when a run would exceed its hard USD spend cap."""
+
 
 DEFAULT_PRICE_PER_1K = os.getenv("CABENCH_PRICE_PER_1K")
 _hard_cap_env = os.getenv("CABENCH_HARD_CAP", "1.0")
@@ -334,7 +344,7 @@ def run_batch(
     if not dry_run and client is None:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         if client.api_key is None:
-            sys.exit("OPENAI_API_KEY env var not set")
+            raise RunnerError("OPENAI_API_KEY env var not set")
 
     total_records = sum(1 for _ in input_path.open())
 
@@ -373,29 +383,33 @@ def run_batch(
     try:
         ensure_csv_header(usage_path, USAGE_COLUMNS)
     except ValueError as exc:
-        sys.exit(str(exc))
+        raise RunnerError(str(exc)) from exc
 
     done = _reconcile_resume_state(output_path, usage_path, total_records)
     if done:
         print(f"Resuming — {done} predictions already exist")
 
     build_prompt = _prompt_builder(dim)
-
-    out_jsonl = output_path.open("a", encoding="utf-8")
     raw_log_path = raw_log if raw_log else output_path.with_suffix(".raw")
-    raw_log_fp = raw_log_path.open("a", encoding="utf-8")
-    usage_fp = usage_path.open("a", newline="")
-    writer = csv.writer(usage_fp)
 
     running_cost = 0.0
     status_counts = {"success": 0, "invalid": 0, "error": 0, "truncated": 0}
     idx = done
-    with input_path.open() as fp_in:
+    with contextlib.ExitStack() as stack:
+        out_jsonl = stack.enter_context(output_path.open("a", encoding="utf-8"))
+        raw_log_fp = stack.enter_context(raw_log_path.open("a", encoding="utf-8"))
+        usage_fp = stack.enter_context(usage_path.open("a", newline=""))
+        fp_in = stack.enter_context(input_path.open())
+        writer = csv.writer(usage_fp)
+
         for idx, line in enumerate(fp_in, 1):
             if idx <= done:
                 continue
 
-            rec: Dict = json.loads(line.strip())
+            try:
+                rec: Dict = json.loads(line.strip())
+            except json.JSONDecodeError as exc:
+                raise RunnerError(f"malformed dataset line {idx} in {input_path}") from exc
             prompt = build_prompt(rec)
 
             if dry_run:
@@ -410,7 +424,7 @@ def run_batch(
             usd = 0.0 if price_per_1k is None else (usage["total"] / 1000 * price_per_1k)
             running_cost += usd
             if hard_cap is not None and running_cost > hard_cap:
-                sys.exit(f"cost {running_cost:.2f} > hard cap ${hard_cap}")
+                raise SpendCapError(f"cost {running_cost:.2f} > hard cap ${hard_cap}")
 
             out_jsonl.write(json.dumps(data, separators=(",", ":")) + "\n")
             raw_log_fp.write(raw_txt + "\n")
@@ -428,10 +442,6 @@ def run_batch(
             extra_wait = max(0, 60 / tpm - 1)
             if extra_wait:
                 time.sleep(extra_wait)
-
-    out_jsonl.close()
-    raw_log_fp.close()
-    usage_fp.close()
 
     print(
         f"Finished {idx - done} calls; total spent ≈ ${running_cost:.2f}. "

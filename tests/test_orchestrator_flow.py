@@ -6,6 +6,7 @@ import pytest
 
 import cabench.orchestrator as orchestrator
 from cabench.contracts import USAGE_COLUMNS
+from cabench.llm.runner import SpendCapError
 
 
 def _write_dataset(path: Path, *, target: str = "00") -> None:
@@ -176,7 +177,7 @@ def test_orchestrator_budget_cap_uses_actual_usage(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
     monkeypatch.setattr(orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.03, "m2": 0.03}))
 
-    with pytest.raises(SystemExit) as exc:
+    with pytest.raises(SpendCapError) as exc:
         orchestrator.run(
             cfg_path=cfg_path,
             data_dir=data_dir,

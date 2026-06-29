@@ -18,7 +18,6 @@ Run CA-Bench end-to-end:
 """
 from __future__ import annotations
 
-import argparse
 import csv
 import hashlib
 import json
@@ -44,8 +43,12 @@ from cabench.contracts import (
     write_schema_manifest,
 )
 from cabench.convert import convert_file
-from cabench.scoring import EvalError, score
-from cabench.llm.runner import run_batch
+from cabench.scoring import score
+from cabench.llm.runner import SpendCapError, run_batch
+
+
+class OrchestratorError(Exception):
+    """Raised for unrecoverable orchestration/config/data errors. Caught at the CLI boundary."""
 
 # Paths & Globals
 ROOT       = Path(__file__).resolve().parents[1]
@@ -57,13 +60,6 @@ for d in (DATA_DIR, LOG_DIR, RESULT_DIR):
     d.mkdir(exist_ok=True)
 
 HARD_SPEND_CEILING = 1.00  # USD per invocation
-
-# System prompt for structured responses
-SYSTEM_PROMPT = (
-    "Return only a valid JSON object with exactly one key: "
-    "'answer'. The value must be a binary array (for 1-D) or nested binary arrays "
-    "(for 2-D). No markdown, no prose, no code fences."
-)
 
 
 def read_usage_csv(path: Path) -> tuple[float, list[list[str]]]:
@@ -82,7 +78,7 @@ def read_usage_csv(path: Path) -> tuple[float, list[list[str]]]:
 
     header = rows[0]
     if "usd" not in header:
-        sys.exit(f"Usage CSV missing 'usd' column: {path}")
+        raise OrchestratorError(f"Usage CSV missing 'usd' column: {path}")
     cost_idx = header.index("usd")
 
     total = 0.0
@@ -95,7 +91,7 @@ def read_usage_csv(path: Path) -> tuple[float, list[list[str]]]:
         try:
             total += float(val)
         except ValueError as exc:
-            sys.exit(f"Invalid usd value '{val}' in {path}: {exc}")
+            raise OrchestratorError(f"Invalid usd value '{val}' in {path}: {exc}") from exc
 
     return total, rows
 
@@ -181,82 +177,48 @@ def resolve_dataset_artifact_path(ds: dict[str, Any], data_dir: Path) -> Path:
     return configured
 
 
-# Main orchestration
-def run(
-    cfg_path: Path,
-    dry_run: bool = False,
-    model_id: Optional[str] = None,
-    model_ids: Optional[List[str]] = None,
-    dataset_names: Optional[List[str]] = None,
-    dim: Optional[int] = None,
-    force_new: bool = False,
-    file: Optional[Path] = None,
-    num_questions: Optional[int] = None,
-    force_preds: bool = False,
-    data_dir: Optional[Path] = None,
-    log_dir: Optional[Path] = None,
-    results_dir: Optional[Path] = None,
-    summarize: bool = True,
-    spend_cap_usd: Optional[float] = None,
-) -> None:
-    data_dir = data_dir or DATA_DIR
-    log_dir = log_dir or LOG_DIR
-    results_dir = results_dir or RESULT_DIR
-    spend_cap_usd = HARD_SPEND_CEILING if spend_cap_usd is None else spend_cap_usd
-    for d in (data_dir, log_dir, results_dir):
-        d.mkdir(parents=True, exist_ok=True)
-    if spend_cap_usd <= 0:
-        sys.exit("Spend cap must be greater than 0 USD.")
-
-    spec = yaml.safe_load(cfg_path.read_text())
-    cli_dim = dim
-    run_summary_rows: List[dict[str, str]] = []
-    invocation_id = uuid.uuid4().hex
-    invocation_started = now_utc_iso()
-
-    selected_models: Optional[set[str]] = None
-    if model_id is not None:
-        selected_models = {model_id}
-    if model_ids:
-        ids = set(model_ids)
-        selected_models = ids if selected_models is None else (selected_models | ids)
-
-    # Filter datasets by dimension if requested
+def _apply_cli_overrides(
+    spec: dict[str, Any],
+    *,
+    cli_dim: Optional[int],
+    dataset_names: Optional[List[str]],
+    file: Optional[Path],
+    num_questions: Optional[int],
+) -> bool:
+    """
+    Mutate ``spec["datasets"]`` in place per the CLI overrides. Returns True if any
+    datasets remain, or False (after printing why) if a filter emptied the list.
+    """
     if cli_dim is not None:
         spec["datasets"] = [ds for ds in spec["datasets"] if ds.get("dim", 1) == cli_dim]
         if not spec["datasets"]:
             print(f"No datasets matching dimension {cli_dim}", file=sys.stderr)
-            return
+            return False
     if dataset_names:
         names = set(dataset_names)
         spec["datasets"] = [ds for ds in spec["datasets"] if ds.get("name") in names]
         if not spec["datasets"]:
             print(f"No datasets matching --datasets {sorted(names)}", file=sys.stderr)
-            return
+            return False
 
-    # Override dataset path if a custom file is provided
     if file is not None:
         for ds in spec["datasets"]:
             ds["path"] = str(file)
             ds["name"] = Path(file).stem
 
-    # Override number of questions for dataset generation
     if num_questions is not None:
         for ds in spec["datasets"]:
             if "gen" in ds:
                 ds["gen"]["n"] = num_questions
+    return True
 
-    scores_path     = results_dir / "scores.csv"
-    metadata_path   = results_dir / "run_metadata.jsonl"
-    actual_spend_total = 0.0
-    master = log_dir / "master_usage.csv"
-    git_meta = get_git_metadata(ROOT)
-    cfg_hash = file_sha256(cfg_path)
 
+def _setup_manifests(scores_path: Path, master: Path, metadata_path: Path) -> None:
+    """Write schema sidecar manifests and validate existing CSV headers."""
     try:
         ensure_csv_header(scores_path, SCORES_COLUMNS)
     except ValueError as exc:
-        sys.exit(str(exc))
+        raise OrchestratorError(str(exc)) from exc
     write_schema_manifest(
         scores_path,
         schema_name=SCORES_SCHEMA_NAME,
@@ -287,51 +249,226 @@ def run(
         try:
             ensure_csv_header(master, USAGE_COLUMNS)
         except ValueError as exc:
-            sys.exit(str(exc))
+            raise OrchestratorError(str(exc)) from exc
+
+
+def _prepare_dataset(
+    ds: dict[str, Any],
+    *,
+    data_dir: Path,
+    force_new: bool,
+    num_questions: Optional[int],
+) -> Optional[tuple[Path, int, str, int]]:
+    """
+    Resolve (generating if needed) the dataset artifact and an optional truncated
+    head copy. Returns (gold_path, n_cases, dataset_sha256, dataset_bytes) or None
+    if the dataset file is missing.
+    """
+    dataset_path = resolve_dataset_artifact_path(ds, data_dir)
+
+    if "gen" in ds:
+        gen_cfg = ds["gen"].copy()
+        mode = gen_cfg.pop("mode", "1d")
+        if force_new or not dataset_path.exists():
+            from cabench.dataset import dispatch_main as gen_cli
+            argv = ["--mode", mode, "--outfile", str(dataset_path)]
+            for k, v in gen_cfg.items():
+                argv += [f"--{k}", str(v)]
+            print(f"Generating dataset {ds['name']} → {dataset_path}")
+            gen_cli(argv)
+        else:
+            print(f"Dataset {ds['name']} already exists; skipping generation")
+
+    gold_path = dataset_path
+    if not gold_path.exists():
+        print("Dataset not found:", gold_path, file=sys.stderr)
+        return None
+
+    n_total = sum(1 for _ in gold_path.open())
+    n_cases = n_total
+
+    if num_questions is not None and num_questions < n_total:
+        head_path = data_dir / f"{gold_path.stem}_head{num_questions}{gold_path.suffix}"
+        if force_new or not head_path.exists() or sum(1 for _ in head_path.open()) != num_questions:
+            with gold_path.open() as src, head_path.open("w", encoding="utf-8") as dst:
+                for idx, line in enumerate(src):
+                    if idx >= num_questions:
+                        break
+                    dst.write(line)
+        gold_path = head_path
+        n_cases = num_questions
+
+    return gold_path, n_cases, file_sha256(gold_path), gold_path.stat().st_size
+
+
+def _build_metadata_record(
+    *,
+    invocation_id: str,
+    invocation_started: str,
+    run_started: str,
+    run_finished: str,
+    dry_run: bool,
+    ds: dict[str, Any],
+    gold_path: Path,
+    dataset_hash: str,
+    dataset_bytes: int,
+    n_cases: int,
+    mdl: dict[str, Any],
+    model_id_run: str,
+    price_per_1k: float,
+    max_calls: int,
+    cfg_path: Path,
+    cfg_hash: str,
+    cli_overrides: dict[str, Any],
+    git_meta: dict[str, Any],
+    artifacts: dict[str, Any],
+    metrics: dict[str, Any],
+    cost_usd: float,
+    status: str,
+) -> dict[str, Any]:
+    """Build one run-metadata record. Used for both dry-run and completed runs."""
+    return {
+        "schema_name": RUN_METADATA_SCHEMA_NAME,
+        "schema_version": RUN_METADATA_SCHEMA_VERSION,
+        "invocation_id": invocation_id,
+        "invocation_started_utc": invocation_started,
+        "run_started_utc": run_started,
+        "run_finished_utc": run_finished,
+        "dry_run": dry_run,
+        "dataset": {
+            "name": ds["name"],
+            "path": str(gold_path),
+            "sha256": dataset_hash,
+            "bytes": dataset_bytes,
+            "num_cases": n_cases,
+            "dim": ds.get("dim", 1),
+        },
+        "model": {
+            "id": model_id_run,
+            "provider": mdl.get("provider"),
+            "price_per_1k_tokens": price_per_1k,
+            "max_calls_per_min": max_calls,
+            "temperature": mdl.get("temperature", 0),
+        },
+        "config": {
+            "path": str(cfg_path),
+            "sha256": cfg_hash,
+            "dataset_spec": ds,
+            "model_spec": mdl,
+            "cli_overrides": cli_overrides,
+        },
+        "git": git_meta,
+        "artifacts": artifacts,
+        "metrics": metrics,
+        "cost_usd": cost_usd,
+        "status": status,
+    }
+
+
+def _merge_usage_into_master(
+    master: Path,
+    usage_before_rows: list[list[str]],
+    usage_after_rows: list[list[str]],
+    usage_csv: Path,
+) -> None:
+    """Append only the per-call usage rows added by this run to the master ledger."""
+    if not usage_after_rows:
+        return
+    if usage_after_rows[0] != USAGE_COLUMNS:
+        raise OrchestratorError(
+            f"Unexpected usage header in {usage_csv}: {usage_after_rows[0]}"
+        )
+    before_n = max(0, len(usage_before_rows) - 1)
+    new_rows = usage_after_rows[1 + before_n :]
+    if new_rows:
+        try:
+            ensure_csv_header(master, USAGE_COLUMNS)
+        except ValueError as exc:
+            raise OrchestratorError(str(exc)) from exc
+        with master.open("a", newline="") as dst:
+            csv.writer(dst).writerows(new_rows)
+
+
+# Main orchestration
+def run(
+    cfg_path: Path,
+    dry_run: bool = False,
+    model_id: Optional[str] = None,
+    model_ids: Optional[List[str]] = None,
+    dataset_names: Optional[List[str]] = None,
+    dim: Optional[int] = None,
+    force_new: bool = False,
+    file: Optional[Path] = None,
+    num_questions: Optional[int] = None,
+    force_preds: bool = False,
+    data_dir: Optional[Path] = None,
+    log_dir: Optional[Path] = None,
+    results_dir: Optional[Path] = None,
+    summarize: bool = True,
+    spend_cap_usd: Optional[float] = None,
+) -> None:
+    data_dir = data_dir or DATA_DIR
+    log_dir = log_dir or LOG_DIR
+    results_dir = results_dir or RESULT_DIR
+    spend_cap_usd = HARD_SPEND_CEILING if spend_cap_usd is None else spend_cap_usd
+    for d in (data_dir, log_dir, results_dir):
+        d.mkdir(parents=True, exist_ok=True)
+    if spend_cap_usd <= 0:
+        raise OrchestratorError("Spend cap must be greater than 0 USD.")
+
+    spec = yaml.safe_load(cfg_path.read_text())
+    cli_dim = dim
+    run_summary_rows: List[dict[str, str]] = []
+    invocation_id = uuid.uuid4().hex
+    invocation_started = now_utc_iso()
+
+    selected_models: Optional[set[str]] = None
+    if model_id is not None:
+        selected_models = {model_id}
+    if model_ids:
+        ids = set(model_ids)
+        selected_models = ids if selected_models is None else (selected_models | ids)
+
+    if not _apply_cli_overrides(
+        spec,
+        cli_dim=cli_dim,
+        dataset_names=dataset_names,
+        file=file,
+        num_questions=num_questions,
+    ):
+        return
+
+    cli_overrides = {
+        "model_id": model_id,
+        "dim": cli_dim,
+        "force_new": force_new,
+        "file": str(file) if file is not None else None,
+        "num_questions": num_questions,
+        "force_preds": force_preds,
+        "spend_cap_usd": spend_cap_usd,
+    }
+
+    scores_path     = results_dir / "scores.csv"
+    metadata_path   = results_dir / "run_metadata.jsonl"
+    actual_spend_total = 0.0
+    master = log_dir / "master_usage.csv"
+    git_meta = get_git_metadata(ROOT)
+    cfg_hash = file_sha256(cfg_path)
+
+    _setup_manifests(scores_path, master, metadata_path)
 
     with scores_path.open("a", newline="") as fp_scores:
         writer = csv.writer(fp_scores)
 
         for ds in spec["datasets"]:
-            dataset_path = resolve_dataset_artifact_path(ds, data_dir)
-
-            # Optional: auto-generate dataset if a "gen" block is present
-            if "gen" in ds:
-                gen_cfg = ds["gen"].copy()
-                mode    = gen_cfg.pop("mode", "1d")
-                if force_new or not dataset_path.exists():
-                    from cabench.dataset import dispatch_main as gen_cli
-                    argv = ["--mode", mode, "--outfile", str(dataset_path)]
-                    for k, v in gen_cfg.items():
-                        argv += [f"--{k}", str(v)]
-                    print(f"Generating dataset {ds['name']} → {dataset_path}")
-                    gen_cli(argv)
-                else:
-                    print(f"Dataset {ds['name']} already exists; skipping generation")
-
-            gold_path = dataset_path
-            if not gold_path.exists():
-                print("Dataset not found:", gold_path, file=sys.stderr)
+            prepared = _prepare_dataset(
+                ds, data_dir=data_dir, force_new=force_new, num_questions=num_questions
+            )
+            if prepared is None:
                 continue
-
-            n_total = sum(1 for _ in gold_path.open())
-            n_cases = n_total
-
-            # Create a truncated copy if num_questions is set and dataset is larger
-            if num_questions is not None and num_questions < n_total:
-                head_path = data_dir / f"{gold_path.stem}_head{num_questions}{gold_path.suffix}"
-                if force_new or not head_path.exists() or sum(1 for _ in head_path.open()) != num_questions:
-                    with gold_path.open() as src, head_path.open("w", encoding="utf-8") as dst:
-                        for idx, line in enumerate(src):
-                            if idx >= num_questions:
-                                break
-                            dst.write(line)
-                gold_path = head_path
-                n_cases = num_questions
+            gold_path, n_cases, dataset_hash, dataset_bytes = prepared
 
             print(f"Dataset {ds['name']} — {n_cases} cases")
-            dataset_hash = file_sha256(gold_path)
-            dataset_bytes = gold_path.stat().st_size
 
             for mdl in spec["models"]:
                 # skip models not matching --model-id (if provided)
@@ -348,7 +485,7 @@ def run(
                 else:
                     remaining = spend_cap_usd - actual_spend_total
                     if remaining <= 0:
-                        sys.exit(
+                        raise SpendCapError(
                             f"Actual spend cap reached (${actual_spend_total:.2f} >= "
                             f"${spend_cap_usd:.2f}). Aborting before {model_id_run}."
                         )
@@ -412,53 +549,33 @@ def run(
                     )
                     append_jsonl_record(
                         metadata_path,
-                        {
-                            "schema_name": RUN_METADATA_SCHEMA_NAME,
-                            "schema_version": RUN_METADATA_SCHEMA_VERSION,
-                            "invocation_id": invocation_id,
-                            "invocation_started_utc": invocation_started,
-                            "run_started_utc": run_started,
-                            "run_finished_utc": run_finished,
-                            "dry_run": True,
-                            "dataset": {
-                                "name": ds["name"],
-                                "path": str(gold_path),
-                                "sha256": dataset_hash,
-                                "bytes": dataset_bytes,
-                                "num_cases": n_cases,
-                                "dim": ds.get("dim", 1),
-                            },
-                            "model": {
-                                "id": model_id_run,
-                                "provider": mdl.get("provider"),
-                                "price_per_1k_tokens": price_per_1k,
-                                "max_calls_per_min": max_calls,
-                                "temperature": mdl.get("temperature", 0),
-                            },
-                            "config": {
-                                "path": str(cfg_path),
-                                "sha256": cfg_hash,
-                                "dataset_spec": ds,
-                                "model_spec": mdl,
-                                "cli_overrides": {
-                                    "model_id": model_id,
-                                    "dim": cli_dim,
-                                    "force_new": force_new,
-                                    "file": str(file) if file is not None else None,
-                                    "num_questions": num_questions,
-                                    "force_preds": force_preds,
-                                    "spend_cap_usd": spend_cap_usd,
-                                },
-                            },
-                            "git": git_meta,
-                            "artifacts": {
+                        _build_metadata_record(
+                            invocation_id=invocation_id,
+                            invocation_started=invocation_started,
+                            run_started=run_started,
+                            run_finished=run_finished,
+                            dry_run=True,
+                            ds=ds,
+                            gold_path=gold_path,
+                            dataset_hash=dataset_hash,
+                            dataset_bytes=dataset_bytes,
+                            n_cases=n_cases,
+                            mdl=mdl,
+                            model_id_run=model_id_run,
+                            price_per_1k=price_per_1k,
+                            max_calls=max_calls,
+                            cfg_path=cfg_path,
+                            cfg_hash=cfg_hash,
+                            cli_overrides=cli_overrides,
+                            git_meta=git_meta,
+                            artifacts={
                                 "dry_run_marker": str(marker_path),
                                 "scores_csv": str(scores_path),
                             },
-                            "metrics": {"norm_hamming": None, "exact_pct": None},
-                            "cost_usd": 0.0,
-                            "status": "dry_run",
-                        },
+                            metrics={"norm_hamming": None, "exact_pct": None},
+                            cost_usd=0.0,
+                            status="dry_run",
+                        ),
                     )
                     continue
 
@@ -496,18 +613,13 @@ def run(
                     hard_cap=max(0.0, spend_cap_usd - actual_spend_total),
                     tpm=max_calls,
                     temperature=0.0,
-                    system=SYSTEM_PROMPT,
                 )
 
                 # 2) convert structured JSONL -> plain-text preds
                 convert_file(jsonl_preds, preds_txt)
 
-                # 3) evaluate
-                try:
-                    metrics = score(gold_path, preds_txt)
-                except EvalError as exc:
-                    print(str(exc), file=sys.stderr)
-                    sys.exit(1)
+                # 3) evaluate (EvalError propagates to the CLI boundary)
+                metrics = score(gold_path, preds_txt)
 
                 norm_acc  = metrics["norm_hamming"]
                 exact_pct = metrics["exact_pct"]
@@ -527,7 +639,7 @@ def run(
                 actual_spend_total += run_cost_usd
                 total_cost_usd = run_cost_usd
                 if actual_spend_total > spend_cap_usd + 1e-9:
-                    sys.exit(
+                    raise SpendCapError(
                         f"Actual spend ${actual_spend_total:.2f} exceeded "
                         f"hard ceiling ${spend_cap_usd:.2f}. Aborting."
                     )
@@ -561,46 +673,26 @@ def run(
                 )
                 append_jsonl_record(
                     metadata_path,
-                    {
-                        "schema_name": RUN_METADATA_SCHEMA_NAME,
-                        "schema_version": RUN_METADATA_SCHEMA_VERSION,
-                        "invocation_id": invocation_id,
-                        "invocation_started_utc": invocation_started,
-                        "run_started_utc": run_started,
-                        "run_finished_utc": run_finished,
-                        "dry_run": False,
-                        "dataset": {
-                            "name": ds["name"],
-                            "path": str(gold_path),
-                            "sha256": dataset_hash,
-                            "bytes": dataset_bytes,
-                            "num_cases": n_cases,
-                            "dim": ds.get("dim", 1),
-                        },
-                        "model": {
-                            "id": model_id_run,
-                            "provider": mdl.get("provider"),
-                            "price_per_1k_tokens": price_per_1k,
-                            "max_calls_per_min": max_calls,
-                            "temperature": mdl.get("temperature", 0),
-                        },
-                        "config": {
-                            "path": str(cfg_path),
-                            "sha256": cfg_hash,
-                            "dataset_spec": ds,
-                            "model_spec": mdl,
-                            "cli_overrides": {
-                                "model_id": model_id,
-                                "dim": cli_dim,
-                                "force_new": force_new,
-                                "file": str(file) if file is not None else None,
-                                "num_questions": num_questions,
-                                "force_preds": force_preds,
-                                "spend_cap_usd": spend_cap_usd,
-                            },
-                        },
-                        "git": git_meta,
-                        "artifacts": {
+                    _build_metadata_record(
+                        invocation_id=invocation_id,
+                        invocation_started=invocation_started,
+                        run_started=run_started,
+                        run_finished=run_finished,
+                        dry_run=False,
+                        ds=ds,
+                        gold_path=gold_path,
+                        dataset_hash=dataset_hash,
+                        dataset_bytes=dataset_bytes,
+                        n_cases=n_cases,
+                        mdl=mdl,
+                        model_id_run=model_id_run,
+                        price_per_1k=price_per_1k,
+                        max_calls=max_calls,
+                        cfg_path=cfg_path,
+                        cfg_hash=cfg_hash,
+                        cli_overrides=cli_overrides,
+                        git_meta=git_meta,
+                        artifacts={
                             "gold_path": str(gold_path),
                             "jsonl_preds": str(jsonl_preds),
                             "preds_txt": str(preds_txt),
@@ -608,28 +700,16 @@ def run(
                             "scores_csv": str(scores_path),
                             "master_usage_csv": str(master),
                         },
-                        "metrics": {"norm_hamming": norm_acc, "exact_pct": exact_pct},
-                        "cost_usd": total_cost_usd,
-                        "status": "completed",
-                    },
+                        metrics={"norm_hamming": norm_acc, "exact_pct": exact_pct},
+                        cost_usd=total_cost_usd,
+                        status="completed",
+                    ),
                 )
 
                 # 5) append only newly-added per-call usage rows to master ledger
-                if usage_after_rows:
-                    if usage_after_rows[0] != USAGE_COLUMNS:
-                        sys.exit(
-                            f"Unexpected usage header in {usage_csv}: {usage_after_rows[0]}"
-                        )
-                    before_n = max(0, len(usage_before_rows) - 1)
-                    new_rows = usage_after_rows[1 + before_n :]
-                    if new_rows:
-                        try:
-                            ensure_csv_header(master, USAGE_COLUMNS)
-                        except ValueError as exc:
-                            sys.exit(str(exc))
-                        with master.open("a", newline="") as dst:
-                            wtr = csv.writer(dst)
-                            wtr.writerows(new_rows)
+                _merge_usage_into_master(
+                    master, usage_before_rows, usage_after_rows, usage_csv
+                )
 
     if not dry_run:
         print(
@@ -638,102 +718,3 @@ def run(
         )
     if summarize:
         print_run_summary(run_summary_rows)
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run CA-Bench orchestrator")
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=ROOT / "bench.yaml",
-        help="Path to bench.yaml",
-    )
-    parser.add_argument(
-        "--model-id",
-        help="If set, only run this model (must match one of the IDs in bench.yaml)",
-    )
-    parser.add_argument(
-        "--models",
-        help="Comma-separated model IDs to run (e.g. gpt-5.4-mini,gpt-5.4).",
-    )
-    parser.add_argument(
-        "--datasets",
-        help="Comma-separated dataset names to run (from bench.yaml).",
-    )
-    parser.add_argument(
-        "--dim",
-        type=int,
-        choices=[1, 2],
-        help="Number of dimensions in the question (1 or 2)",
-    )
-    parser.add_argument(
-        "--new",
-        action="store_true",
-        help="Generate new questions even if dataset file exists",
-    )
-    parser.add_argument(
-        "--file",
-        type=Path,
-        help="Use questions from this specific file",
-    )
-    parser.add_argument(
-        "--numquestions",
-        type=int,
-        help="Number of questions to use in the benchmark",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Build artifacts without calling the API",
-    )
-    parser.add_argument(
-        "--force-preds",
-        action="store_true",
-        help="Overwrite prediction & usage files before model call",
-    )
-    parser.add_argument(
-        "--data-dir",
-        type=Path,
-        default=DATA_DIR,
-        help="Directory for model JSONL/.preds artifacts.",
-    )
-    parser.add_argument(
-        "--log-dir",
-        type=Path,
-        default=LOG_DIR,
-        help="Directory for usage/cost logs.",
-    )
-    parser.add_argument(
-        "--results-dir",
-        type=Path,
-        default=RESULT_DIR,
-        help="Directory for score and run-metadata outputs.",
-    )
-    parser.add_argument(
-        "--no-summary",
-        action="store_true",
-        help="Disable end-of-run summary table.",
-    )
-    parser.add_argument(
-        "--spend-cap",
-        type=float,
-        default=HARD_SPEND_CEILING,
-        help="Hard USD cap for this orchestrator invocation.",
-    )
-    args = parser.parse_args()
-    run(
-        args.config,
-        dry_run=args.dry_run,
-        model_id=args.model_id,
-        model_ids=parse_csv_arg(args.models),
-        dataset_names=parse_csv_arg(args.datasets),
-        dim=args.dim,
-        force_new=args.new,
-        file=args.file,
-        num_questions=args.numquestions,
-        force_preds=args.force_preds,
-        data_dir=args.data_dir,
-        log_dir=args.log_dir,
-        results_dir=args.results_dir,
-        summarize=not args.no_summary,
-        spend_cap_usd=args.spend_cap,
-    )

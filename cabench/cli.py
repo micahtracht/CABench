@@ -8,6 +8,9 @@ from typing import Any
 import yaml
 
 from cabench import convert, dataset, migrate, orchestrator, report, scoring
+from cabench.llm.runner import RunnerError
+from cabench.orchestrator import OrchestratorError
+from cabench.scoring import EvalError
 
 
 DEFAULT_CONFIG = Path("bench.yaml")
@@ -236,4 +239,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     parser = build_parser()
     args = parser.parse_args(argv)
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except (OrchestratorError, RunnerError, EvalError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 1

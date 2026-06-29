@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from cabench.orchestrator import read_usage_csv
+from cabench.orchestrator import OrchestratorError, read_usage_csv
 
 
 def test_read_usage_csv_missing_file_returns_zero(tmp_path: Path):
@@ -31,5 +31,5 @@ def test_read_usage_csv_invalid_usd_exits(tmp_path: Path):
         w.writerow(["ts", "model", "prompt_tok", "completion_tok", "total_tok", "usd"])
         w.writerow(["t1", "m", "1", "1", "2", "not-a-number"])
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(OrchestratorError):
         read_usage_csv(path)
