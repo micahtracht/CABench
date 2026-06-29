@@ -12,7 +12,6 @@ from cabench.llm.runner import RunnerError
 from cabench.orchestrator import OrchestratorError
 from cabench.scoring import EvalError
 
-
 DEFAULT_CONFIG = Path("bench.yaml")
 
 
@@ -24,7 +23,9 @@ def load_config(path: Path) -> dict[str, Any]:
 
 
 def available_presets(spec: dict[str, Any]) -> list[dict[str, Any]]:
-    dataset_names = [str(ds.get("name", "")).strip() for ds in spec.get("datasets", []) if ds.get("name")]
+    dataset_names = [
+        str(ds.get("name", "")).strip() for ds in spec.get("datasets", []) if ds.get("name")
+    ]
     model_ids = [str(m.get("id", "")).strip() for m in spec.get("models", []) if m.get("id")]
     default_preset = {
         "name": "default",
@@ -186,24 +187,34 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--models", help="Comma-separated model IDs")
     run_p.add_argument("--datasets", help="Comma-separated dataset names")
     run_p.add_argument("--dim", type=int, choices=[1, 2], help="Filter to one dimension")
-    run_p.add_argument("--new", action="store_true", help="Regenerate datasets if config includes gen blocks")
+    run_p.add_argument(
+        "--new", action="store_true", help="Regenerate datasets if config includes gen blocks"
+    )
     run_p.add_argument("--file", type=Path, help="Override dataset path")
     run_p.add_argument("--numquestions", type=int, help="Limit question count")
     run_p.add_argument("--dry-run", action="store_true", help="Skip API calls")
-    run_p.add_argument("--force-preds", action="store_true", help="Overwrite prediction and usage files")
+    run_p.add_argument(
+        "--force-preds", action="store_true", help="Overwrite prediction and usage files"
+    )
     run_p.add_argument("--data-dir", type=Path, default=orchestrator.DATA_DIR)
     run_p.add_argument("--log-dir", type=Path, default=orchestrator.LOG_DIR)
     run_p.add_argument("--results-dir", type=Path, default=orchestrator.RESULT_DIR)
     run_p.add_argument("--spend-cap", type=float, default=orchestrator.HARD_SPEND_CEILING)
-    run_p.add_argument("--no-summary", action="store_true", help="Disable orchestrator summary table")
-    run_p.add_argument("--no-report", action="store_true", help="Skip writing and printing the latest report")
+    run_p.add_argument(
+        "--no-summary", action="store_true", help="Disable orchestrator summary table"
+    )
+    run_p.add_argument(
+        "--no-report", action="store_true", help="Skip writing and printing the latest report"
+    )
     run_p.set_defaults(func=run_command)
 
     report_p = sub.add_parser("report", help="Render benchmark reports from saved results.")
     report_p.add_argument("--results-dir", type=Path, default=orchestrator.RESULT_DIR)
     report_p.add_argument("--scores", type=Path, help="Explicit scores.csv path")
     report_p.add_argument("--metadata", type=Path, help="Explicit run_metadata.jsonl path")
-    report_p.add_argument("--latest-only", action="store_true", help="Show only the latest invocation summary")
+    report_p.add_argument(
+        "--latest-only", action="store_true", help="Show only the latest invocation summary"
+    )
     report_p.add_argument("--out", type=Path, help="Optional output path for the rendered report")
     report_p.set_defaults(func=report_command)
 
@@ -215,7 +226,9 @@ def build_parser() -> argparse.ArgumentParser:
     # forwards their raw args to each tool's own parser before argparse runs.
     sub.add_parser("generate", help="Generate a 1-D/2-D CA dataset (see --mode).", add_help=False)
     sub.add_parser("eval", help="Score predictions against a gold JSONL.", add_help=False)
-    sub.add_parser("convert", help="Flatten structured JSONL predictions to bit strings.", add_help=False)
+    sub.add_parser(
+        "convert", help="Flatten structured JSONL predictions to bit strings.", add_help=False
+    )
     sub.add_parser("migrate", help="Migrate legacy artifacts to canonical schemas.", add_help=False)
 
     return parser

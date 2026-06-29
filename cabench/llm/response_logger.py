@@ -24,4 +24,3 @@ def log_response(model: str, text: str, *, log_file: pathlib.Path = LOG_PATH) ->
     }
     with log_file.open("a", encoding="utf-8") as fp:
         fp.write(json.dumps(entry, ensure_ascii=False) + "\n")
-

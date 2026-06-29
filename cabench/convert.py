@@ -13,14 +13,18 @@ python -m cabench convert \
 """
 
 from __future__ import annotations
-import argparse, json, pathlib, sys
-from typing import List
+
+import argparse
+import pathlib
+import sys
+
 from cabench.contracts import (
     PREDS_TEXT_SCHEMA_NAME,
     PREDS_TEXT_SCHEMA_VERSION,
     write_schema_manifest,
 )
 from cabench.json_extract import extract_answer_json
+
 
 def json_to_bits(obj: dict) -> str:
     """
@@ -43,7 +47,7 @@ def json_to_bits(obj: dict) -> str:
         else:
             raise ValueError(f"invalid bit value: {x!r}")
 
-    bits: List[str] = []
+    bits: list[str] = []
     _collect(obj["answer"], bits)
     flat = "".join(bits)
     if not flat:
@@ -66,15 +70,13 @@ def convert_file(in_path: pathlib.Path, out_path: pathlib.Path) -> None:
                 obj = extract_answer_json(line)
                 if obj is None:
                     raise ValueError("No JSON object found in line")
-                
+
                 bits = json_to_bits(obj)
                 fout.write(bits + "\n")
                 n_ok += 1
             except Exception as exc:
                 n_bad += 1
-                sys.stderr.write(
-                    f"[warn] line {lineno}: {exc}; writing blank line\n"
-                )
+                sys.stderr.write(f"[warn] line {lineno}: {exc}; writing blank line\n")
                 fout.write("\n")  # keep alignment with gold file
 
     write_schema_manifest(
@@ -86,7 +88,7 @@ def convert_file(in_path: pathlib.Path, out_path: pathlib.Path) -> None:
     )
     print(f"wrote {n_ok} predictions. {n_bad} lines had errors → blank")
 
- 
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", type=pathlib.Path, required=True, help="JSONL file")

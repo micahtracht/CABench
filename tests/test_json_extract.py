@@ -11,7 +11,7 @@ def test_extract_with_prose_before_and_after():
 
 
 def test_extract_code_fenced_json():
-    s = "```json\n{\"answer\":[0,0,1]}\n```"
+    s = '```json\n{"answer":[0,0,1]}\n```'
     assert extract_answer_json(s) == {"answer": [0, 0, 1]}
 
 
@@ -31,11 +31,7 @@ def test_extract_prefers_last_answer_object():
 
 
 def test_extract_reasoning_trace_answer_on_last_line():
-    s = (
-        "Step 1: the left cell flips.\n"
-        "Step 2: the right cell stays.\n"
-        '{"answer":[1,1,0,0]}'
-    )
+    s = 'Step 1: the left cell flips.\nStep 2: the right cell stays.\n{"answer":[1,1,0,0]}'
     assert extract_answer_json(s) == {"answer": [1, 1, 0, 0]}
 
 

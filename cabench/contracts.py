@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import csv
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 SCORES_SCHEMA_NAME = "cabench.results.scores"
 SCORES_SCHEMA_VERSION = "1.0.0"
@@ -50,9 +50,7 @@ def ensure_csv_header(path: Path, expected_header: Sequence[str]) -> None:
         current = next(reader, None)
 
     if current != expected:
-        raise ValueError(
-            f"CSV header mismatch for {path}. expected={expected} got={current}"
-        )
+        raise ValueError(f"CSV header mismatch for {path}. expected={expected} got={current}")
 
 
 def write_schema_manifest(

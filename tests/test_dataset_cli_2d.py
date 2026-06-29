@@ -1,19 +1,28 @@
 import json
+
 from cabench.dataset import main_2d as gen2d_cli
-import pathlib
 
 
 def _run_2d(tmp_path, *, n=4, h=4, w=4, t=1, density=0.4, seed=7):
     out = tmp_path / "data2d.jsonl"
-    gen2d_cli([
-        "--n", str(n),
-        "--height", str(h),
-        "--width", str(w),
-        "--timesteps", str(t),
-        "--density", str(density),
-        "--seed", str(seed),
-        "--outfile", str(out),
-    ])
+    gen2d_cli(
+        [
+            "--n",
+            str(n),
+            "--height",
+            str(h),
+            "--width",
+            str(w),
+            "--timesteps",
+            str(t),
+            "--density",
+            str(density),
+            "--seed",
+            str(seed),
+            "--outfile",
+            str(out),
+        ]
+    )
     return out
 
 
@@ -34,6 +43,6 @@ def test_target_shape_matches_init(tmp_path):
         init = obj["init"]
         target = obj["target"]
 
-        assert len(init) == len(target)          # same rows
-        for r_init, r_tgt in zip(init, target):
-            assert len(r_init) == len(r_tgt)     # same cols
+        assert len(init) == len(target)  # same rows
+        for r_init, r_tgt in zip(init, target, strict=False):
+            assert len(r_init) == len(r_tgt)  # same cols

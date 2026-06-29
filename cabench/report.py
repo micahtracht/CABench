@@ -168,7 +168,14 @@ def aggregate_by_model_dataset(rows: list[dict[str, Any]]) -> list[dict[str, Any
                 "cost_per_case": (total_cost / total_cases) if total_cases else None,
             }
         )
-    out.sort(key=lambda x: (x["dataset"], -x["avg_norm_hamming"], -x["avg_exact_pct"], x["total_cost_usd"]))
+    out.sort(
+        key=lambda x: (
+            x["dataset"],
+            -x["avg_norm_hamming"],
+            -x["avg_exact_pct"],
+            x["total_cost_usd"],
+        )
+    )
     return out
 
 
@@ -206,7 +213,9 @@ def latest_invocation_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for idx, row in enumerate(rows):
-        key = str(row.get("invocation_id", "")).strip() or f"legacy:{idx}:{_invocation_sort_key(row)}"
+        key = (
+            str(row.get("invocation_id", "")).strip() or f"legacy:{idx}:{_invocation_sort_key(row)}"
+        )
         grouped[key].append(row)
 
     return max(
@@ -272,7 +281,9 @@ def render_latest_invocation(rows: list[dict[str, Any]]) -> str:
 
     first = latest[0]
     invocation_id = str(first.get("invocation_id", "")).strip() or "legacy"
-    started_utc = str(first.get("invocation_started_utc", "")).strip() or _invocation_sort_key(first)
+    started_utc = str(first.get("invocation_started_utc", "")).strip() or _invocation_sort_key(
+        first
+    )
     finished_utc = max(finished_times) if finished_times else "-"
     summary_items = [
         ("invocation_id", invocation_id),
@@ -350,7 +361,7 @@ def render_report(
                 [
                     ("scored_runs", str(len(aggregate_rows))),
                     ("models_compared", str(len(by_model))),
-                    ("datasets_covered", str(len({r['dataset'] for r in aggregate_rows}))),
+                    ("datasets_covered", str(len({r["dataset"] for r in aggregate_rows}))),
                     (
                         "best_norm_hamming",
                         f"{best_model['model']} ({best_model['avg_norm_hamming']:.4f})",
@@ -373,7 +384,14 @@ def render_report(
             "",
             "Headline Metrics By Model",
             _format_table(
-                ["model", "runs", "avg_norm_hamming", "avg_exact_pct", "total_cost_usd", "cost_per_case"],
+                [
+                    "model",
+                    "runs",
+                    "avg_norm_hamming",
+                    "avg_exact_pct",
+                    "total_cost_usd",
+                    "cost_per_case",
+                ],
                 [
                     [
                         r["model"],
@@ -389,7 +407,15 @@ def render_report(
             "",
             "Headline Metrics By Dataset",
             _format_table(
-                ["dataset", "model", "runs", "avg_norm_hamming", "avg_exact_pct", "total_cost_usd", "cost_per_case"],
+                [
+                    "dataset",
+                    "model",
+                    "runs",
+                    "avg_norm_hamming",
+                    "avg_exact_pct",
+                    "total_cost_usd",
+                    "cost_per_case",
+                ],
                 [
                     [
                         r["dataset"],

@@ -2,8 +2,8 @@ from pathlib import Path
 
 from cabench.report import (
     aggregate_by_model,
-    load_scores,
     load_run_metadata,
+    load_scores,
     metric_rows_from_metadata,
     render_report,
 )

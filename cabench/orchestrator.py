@@ -16,6 +16,7 @@ Run CA-Bench end-to-end:
 3. In --dry-run mode, skip API calls and API-dependent postprocessing
    (conversion/evaluation), and write explicit dry-run markers.
 """
+
 from __future__ import annotations
 
 import csv
@@ -24,10 +25,12 @@ import json
 import subprocess
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any
+
 import yaml
+
 from cabench.contracts import (
     PRED_JSONL_SCHEMA_NAME,
     PRED_JSONL_SCHEMA_VERSION,
@@ -43,17 +46,18 @@ from cabench.contracts import (
     write_schema_manifest,
 )
 from cabench.convert import convert_file
-from cabench.scoring import score
 from cabench.llm.runner import SpendCapError, run_batch
+from cabench.scoring import score
 
 
 class OrchestratorError(Exception):
     """Raised for unrecoverable orchestration/config/data errors. Caught at the CLI boundary."""
 
+
 # Paths & Globals
-ROOT       = Path(__file__).resolve().parents[1]
-DATA_DIR   = ROOT / "data"
-LOG_DIR    = ROOT / "logs"
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "data"
+LOG_DIR = ROOT / "logs"
 RESULT_DIR = ROOT / "results"
 
 for d in (DATA_DIR, LOG_DIR, RESULT_DIR):
@@ -97,7 +101,7 @@ def read_usage_csv(path: Path) -> tuple[float, list[list[str]]]:
 
 
 def now_utc_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def file_sha256(path: Path) -> str:
@@ -139,14 +143,14 @@ def append_jsonl_record(path: Path, record: dict[str, Any]) -> None:
         fp.write(json.dumps(record, separators=(",", ":")) + "\n")
 
 
-def parse_csv_arg(value: Optional[str]) -> Optional[List[str]]:
+def parse_csv_arg(value: str | None) -> list[str] | None:
     if value is None:
         return None
     items = [x.strip() for x in value.split(",") if x.strip()]
     return items or None
 
 
-def print_run_summary(rows: List[dict[str, str]]) -> None:
+def print_run_summary(rows: list[dict[str, str]]) -> None:
     if not rows:
         print("Run summary: no model/dataset runs were executed.")
         return
@@ -180,10 +184,10 @@ def resolve_dataset_artifact_path(ds: dict[str, Any], data_dir: Path) -> Path:
 def _apply_cli_overrides(
     spec: dict[str, Any],
     *,
-    cli_dim: Optional[int],
-    dataset_names: Optional[List[str]],
-    file: Optional[Path],
-    num_questions: Optional[int],
+    cli_dim: int | None,
+    dataset_names: list[str] | None,
+    file: Path | None,
+    num_questions: int | None,
 ) -> bool:
     """
     Mutate ``spec["datasets"]`` in place per the CLI overrides. Returns True if any
@@ -257,8 +261,8 @@ def _prepare_dataset(
     *,
     data_dir: Path,
     force_new: bool,
-    num_questions: Optional[int],
-) -> Optional[tuple[Path, int, str, int]]:
+    num_questions: int | None,
+) -> tuple[Path, int, str, int] | None:
     """
     Resolve (generating if needed) the dataset artifact and an optional truncated
     head copy. Returns (gold_path, n_cases, dataset_sha256, dataset_bytes) or None
@@ -271,6 +275,7 @@ def _prepare_dataset(
         mode = gen_cfg.pop("mode", "1d")
         if force_new or not dataset_path.exists():
             from cabench.dataset import dispatch_main as gen_cli
+
             argv = ["--mode", mode, "--outfile", str(dataset_path)]
             for k, v in gen_cfg.items():
                 argv += [f"--{k}", str(v)]
@@ -375,9 +380,7 @@ def _merge_usage_into_master(
     if not usage_after_rows:
         return
     if usage_after_rows[0] != USAGE_COLUMNS:
-        raise OrchestratorError(
-            f"Unexpected usage header in {usage_csv}: {usage_after_rows[0]}"
-        )
+        raise OrchestratorError(f"Unexpected usage header in {usage_csv}: {usage_after_rows[0]}")
     before_n = max(0, len(usage_before_rows) - 1)
     new_rows = usage_after_rows[1 + before_n :]
     if new_rows:
@@ -393,19 +396,19 @@ def _merge_usage_into_master(
 def run(
     cfg_path: Path,
     dry_run: bool = False,
-    model_id: Optional[str] = None,
-    model_ids: Optional[List[str]] = None,
-    dataset_names: Optional[List[str]] = None,
-    dim: Optional[int] = None,
+    model_id: str | None = None,
+    model_ids: list[str] | None = None,
+    dataset_names: list[str] | None = None,
+    dim: int | None = None,
     force_new: bool = False,
-    file: Optional[Path] = None,
-    num_questions: Optional[int] = None,
+    file: Path | None = None,
+    num_questions: int | None = None,
     force_preds: bool = False,
-    data_dir: Optional[Path] = None,
-    log_dir: Optional[Path] = None,
-    results_dir: Optional[Path] = None,
+    data_dir: Path | None = None,
+    log_dir: Path | None = None,
+    results_dir: Path | None = None,
     summarize: bool = True,
-    spend_cap_usd: Optional[float] = None,
+    spend_cap_usd: float | None = None,
 ) -> None:
     data_dir = data_dir or DATA_DIR
     log_dir = log_dir or LOG_DIR
@@ -418,11 +421,11 @@ def run(
 
     spec = yaml.safe_load(cfg_path.read_text())
     cli_dim = dim
-    run_summary_rows: List[dict[str, str]] = []
+    run_summary_rows: list[dict[str, str]] = []
     invocation_id = uuid.uuid4().hex
     invocation_started = now_utc_iso()
 
-    selected_models: Optional[set[str]] = None
+    selected_models: set[str] | None = None
     if model_id is not None:
         selected_models = {model_id}
     if model_ids:
@@ -448,8 +451,8 @@ def run(
         "spend_cap_usd": spend_cap_usd,
     }
 
-    scores_path     = results_dir / "scores.csv"
-    metadata_path   = results_dir / "run_metadata.jsonl"
+    scores_path = results_dir / "scores.csv"
+    metadata_path = results_dir / "run_metadata.jsonl"
     actual_spend_total = 0.0
     master = log_dir / "master_usage.csv"
     git_meta = get_git_metadata(ROOT)
@@ -497,13 +500,15 @@ def run(
                 # pick the correct runner for this dataset's dimensionality
                 ds_dim = ds.get("dim", 1)
                 if ds_dim not in (1, 2):
-                    print(f"Unsupported dimension {ds_dim} in dataset '{ds['name']}'", file=sys.stderr)
+                    print(
+                        f"Unsupported dimension {ds_dim} in dataset '{ds['name']}'", file=sys.stderr
+                    )
                     continue
 
                 # 1) call LLM for structured JSONL predictions
                 jsonl_preds = data_dir / f"{model_id_run}_{ds['name']}.jsonl"
-                usage_csv   = log_dir  / f"{model_id_run}_{ds['name']}_usage.csv"
-                preds_txt   = data_dir / f"{model_id_run}_{ds['name']}.preds"
+                usage_csv = log_dir / f"{model_id_run}_{ds['name']}_usage.csv"
+                preds_txt = data_dir / f"{model_id_run}_{ds['name']}.preds"
 
                 if force_preds:
                     for p in (jsonl_preds, usage_csv, preds_txt):
@@ -523,15 +528,17 @@ def run(
                     marker_path.write_text(json.dumps(marker, indent=2) + "\n", encoding="utf-8")
                     run_finished = now_utc_iso()
 
-                    writer.writerow([
-                        run_finished,
-                        ds["name"],
-                        model_id_run,
-                        "",
-                        "",
-                        "0.0000",
-                        f"DRY_RUN:{marker_path}",
-                    ])
+                    writer.writerow(
+                        [
+                            run_finished,
+                            ds["name"],
+                            model_id_run,
+                            "",
+                            "",
+                            "0.0000",
+                            f"DRY_RUN:{marker_path}",
+                        ]
+                    )
                     run_summary_rows.append(
                         {
                             "dataset": ds["name"],
@@ -621,7 +628,7 @@ def run(
                 # 3) evaluate (EvalError propagates to the CLI boundary)
                 metrics = score(gold_path, preds_txt)
 
-                norm_acc  = metrics["norm_hamming"]
+                norm_acc = metrics["norm_hamming"]
                 exact_pct = metrics["exact_pct"]
 
                 # 4) read actual usage and compute this run's spend delta
@@ -646,15 +653,17 @@ def run(
 
                 # append run-level metrics
                 run_finished = now_utc_iso()
-                writer.writerow([
-                    run_finished,
-                    ds["name"],
-                    model_id_run,
-                    f"{norm_acc:.4f}",
-                    f"{exact_pct:.2f}",
-                    f"{total_cost_usd:.4f}",
-                    str(preds_txt),
-                ])
+                writer.writerow(
+                    [
+                        run_finished,
+                        ds["name"],
+                        model_id_run,
+                        f"{norm_acc:.4f}",
+                        f"{exact_pct:.2f}",
+                        f"{total_cost_usd:.4f}",
+                        str(preds_txt),
+                    ]
+                )
                 run_summary_rows.append(
                     {
                         "dataset": ds["name"],
@@ -707,9 +716,7 @@ def run(
                 )
 
                 # 5) append only newly-added per-call usage rows to master ledger
-                _merge_usage_into_master(
-                    master, usage_before_rows, usage_after_rows, usage_csv
-                )
+                _merge_usage_into_master(master, usage_before_rows, usage_after_rows, usage_csv)
 
     if not dry_run:
         print(

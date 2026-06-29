@@ -4,8 +4,8 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from cabench.contracts import (
     RUN_METADATA_SCHEMA_NAME,
@@ -54,7 +54,9 @@ def _migrate_csv_with_aliases(
 
     index_by_col = {c: i for i, c in enumerate(mapped)}
     if any(c not in index_by_col for c in target_columns):
-        raise ValueError(f"Missing required columns for {path}: have={mapped}, need={target_columns}")
+        raise ValueError(
+            f"Missing required columns for {path}: have={mapped}, need={target_columns}"
+        )
 
     migrated: list[list[str]] = [target_columns]
     for row in rows[1:]:
@@ -165,7 +167,9 @@ def migrate_run_metadata(path: Path) -> bool:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Migrate legacy CABench artifacts to canonical schemas.")
+    p = argparse.ArgumentParser(
+        description="Migrate legacy CABench artifacts to canonical schemas."
+    )
     p.add_argument("--results-dir", type=Path, default=Path("results"))
     p.add_argument("--log-dir", type=Path, default=Path("logs"))
     p.add_argument("--scores", type=Path, help="Optional explicit scores.csv path")

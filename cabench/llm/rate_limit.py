@@ -5,6 +5,7 @@ _last_time = 0.0
 _lock = Lock()
 _min_interval = 1.0
 
+
 def set_tpm(tpm: int) -> None:
     """Adjust the minimum delay based on requests per minute."""
     global _min_interval
@@ -12,6 +13,7 @@ def set_tpm(tpm: int) -> None:
         _min_interval = 1.0
     else:
         _min_interval = min(60.0 / tpm, 1.0)
+
 
 def wait_one_second():
     """Block until `_min_interval` seconds have passed since the last call."""

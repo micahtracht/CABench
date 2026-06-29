@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 
 
@@ -61,7 +62,7 @@ class Rule1D(_RuleBase):
         return self.rule
 
     @classmethod
-    def from_int(cls, code: int, num_states: int = 2, neighbor_count: int = 2) -> "Rule1D":
+    def from_int(cls, code: int, num_states: int = 2, neighbor_count: int = 2) -> Rule1D:
         """Construct from an integer code, e.g. 0..63 for a 2-state ECA."""
         return cls(
             _bits_from_int(code, num_states, neighbor_count),
@@ -86,7 +87,7 @@ class Rule2D(_RuleBase):
         return self.rule_bits
 
     @classmethod
-    def from_int(cls, code: int, *, num_states: int = 2, neighbor_count: int = 8) -> "Rule2D":
+    def from_int(cls, code: int, *, num_states: int = 2, neighbor_count: int = 8) -> Rule2D:
         """Build a Rule2D from an integer in 0 .. 2**(num_states*(neighbor_count+1)) - 1."""
         return cls(
             _bits_from_int(code, num_states, neighbor_count),

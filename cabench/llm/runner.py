@@ -7,6 +7,7 @@ structured (JSON-mode) responses plus per-call usage. A single ``run_batch``
 handles both dimensionalities; the only per-dimension difference is how a
 dataset record is turned into a prompt.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -17,22 +18,10 @@ import os
 import pathlib
 import sys
 import time
-from typing import Callable, Dict, List
+from collections.abc import Callable
 
-from openai import OpenAI, RateLimitError, APIError
+from openai import APIError, OpenAI, RateLimitError
 
-from cabench.env import load_project_env
-from .rate_limit import wait_one_second, set_tpm
-from .response_logger import log_response
-
-from cabench.generate import (
-    CAProblemGenerator2D,
-    ECAProblemGenerator,
-    Problem1D,
-    Problem2D,
-)
-from cabench.rules import Rule1D, Rule2D
-from cabench.json_extract import extract_answer_json
 from cabench.contracts import (
     PRED_JSONL_SCHEMA_NAME,
     PRED_JSONL_SCHEMA_VERSION,
@@ -42,6 +31,18 @@ from cabench.contracts import (
     ensure_csv_header,
     write_schema_manifest,
 )
+from cabench.env import load_project_env
+from cabench.generate import (
+    CAProblemGenerator2D,
+    ECAProblemGenerator,
+    Problem1D,
+    Problem2D,
+)
+from cabench.json_extract import extract_answer_json
+from cabench.rules import Rule1D, Rule2D
+
+from .rate_limit import set_tpm, wait_one_second
+from .response_logger import log_response
 
 load_project_env()
 
@@ -78,13 +79,13 @@ MAX_API_RETRY_SLEEP = 8.0
 # --------------------------------------------------------------------------- #
 # Per-dimension prompt construction
 # --------------------------------------------------------------------------- #
-def _problem_1d(record: Dict) -> Problem1D:
+def _problem_1d(record: dict) -> Problem1D:
     init = [int(ch) for ch in record["init"]]
     rule_bits = record["rule"] if "rule" in record else record["rule_bits"]
     return Problem1D(start_state=init, rule=Rule1D(rule_bits), timesteps=record["timesteps"])
 
 
-def _problem_2d(record: Dict) -> Problem2D:
+def _problem_2d(record: dict) -> Problem2D:
     return Problem2D(
         start_grid=record["init"],
         rule=Rule2D(record["rule"]),
@@ -92,27 +93,27 @@ def _problem_2d(record: Dict) -> Problem2D:
     )
 
 
-def _prompt_builder(dim: int) -> Callable[[Dict], str]:
+def _prompt_builder(dim: int) -> Callable[[dict], str]:
     """Return a function mapping a dataset record to a prompt string."""
     if dim == 1:
-        gen = ECAProblemGenerator(state_size=0)  # size unused for prompt building
-        return lambda rec: gen.generate_prompt_1D(_problem_1d(rec))
+        gen_1d = ECAProblemGenerator(state_size=0)  # size unused for prompt building
+        return lambda rec: gen_1d.generate_prompt_1D(_problem_1d(rec))
     if dim == 2:
-        gen = CAProblemGenerator2D(height=1, width=1)  # dims unused for prompt building
-        return lambda rec: gen.generate_prompt_2D(_problem_2d(rec))
+        gen_2d = CAProblemGenerator2D(height=1, width=1)  # dims unused for prompt building
+        return lambda rec: gen_2d.generate_prompt_2D(_problem_2d(rec))
     raise ValueError(f"unsupported dimension: {dim}")
 
 
 # --------------------------------------------------------------------------- #
 # Resume reconciliation
 # --------------------------------------------------------------------------- #
-def _write_jsonl_lines(path: pathlib.Path, lines: List[str]) -> None:
+def _write_jsonl_lines(path: pathlib.Path, lines: list[str]) -> None:
     with path.open("w", encoding="utf-8") as fp:
         for line in lines:
             fp.write(line + "\n")
 
 
-def _write_usage_rows(path: pathlib.Path, rows: List[List[str]]) -> None:
+def _write_usage_rows(path: pathlib.Path, rows: list[list[str]]) -> None:
     with path.open("w", newline="", encoding="utf-8") as fp:
         csv.writer(fp).writerows(rows)
 
@@ -126,7 +127,7 @@ def _reconcile_resume_state(
     Align prediction and usage files to a consistent prefix for safe resume.
     Keeps only valid rows and truncates both files to min(valid_pred, valid_usage).
     """
-    valid_preds: List[str] = []
+    valid_preds: list[str] = []
     pred_total = 0
     pred_corrupt = False
     if output_path.exists():
@@ -152,7 +153,7 @@ def _reconcile_resume_state(
         rows = list(csv.reader(fp))
 
     header = USAGE_COLUMNS
-    valid_usage_rows: List[List[str]] = [header]
+    valid_usage_rows: list[list[str]] = [header]
     usage_corrupt = False
     usage_data = rows[1:] if rows else []
     for row in usage_data:
@@ -204,6 +205,7 @@ def chat_json(
     temperature: float = 0.0,
 ):
     """One sample with retries -> (record_dict, token_usage, raw_text)."""
+    assert client is not None, "OpenAI client must be initialized before chat_json"
     REQUIRED_KEYS = ("answer", "final_state")
     total_usage = {"prompt": 0, "completion": 0, "total": 0}
     raw = ""
@@ -327,7 +329,7 @@ def run_batch(
     tpm: int = 60,
     dry_run: bool = False,
     raw_log: pathlib.Path | None = None,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """
     Query ``model`` over every record in ``input_path`` and append structured
     predictions to ``output_path`` and per-call usage to ``usage_path``.
@@ -367,10 +369,7 @@ def run_batch(
         schema_name=PRED_JSONL_SCHEMA_NAME,
         schema_version=PRED_JSONL_SCHEMA_VERSION,
         fmt="jsonl",
-        notes=(
-            "One JSON object per sample. Expected answer payload in "
-            "'answer' or 'final_state'."
-        ),
+        notes=("One JSON object per sample. Expected answer payload in 'answer' or 'final_state'."),
     )
     write_schema_manifest(
         usage_path,
@@ -407,7 +406,7 @@ def run_batch(
                 continue
 
             try:
-                rec: Dict = json.loads(line.strip())
+                rec: dict = json.loads(line.strip())
             except json.JSONDecodeError as exc:
                 raise RunnerError(f"malformed dataset line {idx} in {input_path}") from exc
             prompt = build_prompt(rec)
@@ -429,14 +428,16 @@ def run_batch(
             out_jsonl.write(json.dumps(data, separators=(",", ":")) + "\n")
             raw_log_fp.write(raw_txt + "\n")
             raw_log_fp.flush()
-            writer.writerow([
-                time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                model,
-                usage["prompt"],
-                usage["completion"],
-                usage["total"],
-                f"{usd:.5f}",
-            ])
+            writer.writerow(
+                [
+                    time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    model,
+                    usage["prompt"],
+                    usage["completion"],
+                    usage["total"],
+                    f"{usd:.5f}",
+                ]
+            )
             out_jsonl.flush()
             usage_fp.flush()
             extra_wait = max(0, 60 / tpm - 1)
@@ -459,10 +460,18 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--output", type=pathlib.Path, required=True)
     ap.add_argument("--usage", type=pathlib.Path, required=True)
     ap.add_argument("--dim", type=int, choices=[1, 2], default=1)
-    ap.add_argument("--price-per-1k", type=float, default=None,
-                    help="USD price per 1K tokens (overrides CABENCH_PRICE_PER_1K)")
-    ap.add_argument("--hard-cap", type=float, default=None,
-                    help="Abort if spend exceeds this USD (overrides CABENCH_HARD_CAP)")
+    ap.add_argument(
+        "--price-per-1k",
+        type=float,
+        default=None,
+        help="USD price per 1K tokens (overrides CABENCH_PRICE_PER_1K)",
+    )
+    ap.add_argument(
+        "--hard-cap",
+        type=float,
+        default=None,
+        help="Abort if spend exceeds this USD (overrides CABENCH_HARD_CAP)",
+    )
     ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--system", type=str, default=DEFAULT_SYSTEM_PROMPT)
     ap.add_argument("--tpm", type=int, default=60, help="max calls / minute")
@@ -471,7 +480,7 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def main(argv: List[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     run_batch(
         model=args.model,

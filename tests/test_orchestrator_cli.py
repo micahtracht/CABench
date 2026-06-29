@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 
 import cabench.orchestrator as orchestrator
+
+
 def test_parse_csv_arg():
     assert orchestrator.parse_csv_arg(None) is None
     assert orchestrator.parse_csv_arg("") is None

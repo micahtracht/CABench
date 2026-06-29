@@ -21,7 +21,7 @@ def test_density_bounds_2d():
 
     ones = sum(cell for row in grid for cell in row)
     actual = ones / (h * w)
-    assert abs(actual - density) < 0.03      # within ±3 pp
+    assert abs(actual - density) < 0.03  # within ±3 pp
 
 
 def test_batch_nontrivial_2d():

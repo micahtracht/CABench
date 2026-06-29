@@ -19,11 +19,14 @@ python -m cabench generate --mode 2d \
 """
 
 from __future__ import annotations
-import argparse, json, pathlib, sys
-from typing import List
-import numpy as np
+
+import argparse
+import json
+import pathlib
+
 from cabench.generate import CAProblemGenerator2D, ECAProblemGenerator, Problem1D, Problem2D
 from cabench.simulate import simulate, simulate_2d
+
 
 def problem_to_jsonl(problem: Problem1D) -> str:
     """
@@ -40,18 +43,25 @@ def problem_to_jsonl(problem: Problem1D) -> str:
         separators=(",", ":"),
     )
 
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Generate a JSONL file of 1-D ECA tasks.")
-    
+
     p.add_argument("--n", type=int, required=True, help="Number of problems to generate.")
     p.add_argument("--size", type=int, default=32, help="Length of the 1-D lattice.")
     p.add_argument("--timesteps", type=int, default=4, help="Evolution steps per problem.")
-    p.add_argument("--density", type=float, default=0.5, help="Probability a cell is alive in the initial state.")
+    p.add_argument(
+        "--density",
+        type=float,
+        default=0.5,
+        help="Probability a cell is alive in the initial state.",
+    )
     p.add_argument("--seed", type=int, default=42, help="RNG seed for reproducibility.")
     p.add_argument("--outfile", type=pathlib.Path, required=True, help="Where to write the JSONL.")
     return p
 
-def main(argv: List[str] | None = None) -> None:
+
+def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
 
     gen = ECAProblemGenerator(
@@ -61,10 +71,10 @@ def main(argv: List[str] | None = None) -> None:
     )
     batch = gen.generate_batch(
         num_problems=args.n,
-        timesteps=args.timesteps, # int allowed
+        timesteps=args.timesteps,  # int allowed
         trim_trivial=True,
     )
-    
+
     args.outfile.parent.mkdir(parents=True, exist_ok=True)
     with args.outfile.open("w", encoding="utf-8") as f:
         for prob in batch:
@@ -98,15 +108,13 @@ def build_parser_2d() -> argparse.ArgumentParser:
     p.add_argument("--height", type=int, default=16, help="Grid height.")
     p.add_argument("--width", type=int, default=16, help="Grid width.")
     p.add_argument("--timesteps", type=int, default=1, help="Steps per problem.")
-    p.add_argument(
-        "--density", type=float, default=0.5, help="Probability a cell starts alive."
-    )
+    p.add_argument("--density", type=float, default=0.5, help="Probability a cell starts alive.")
     p.add_argument("--seed", type=int, default=42, help="RNG seed.")
     p.add_argument("--outfile", type=pathlib.Path, required=True, help="Output JSONL.")
     return p
 
 
-def main_2d(argv: List[str] | None = None) -> None:
+def main_2d(argv: list[str] | None = None) -> None:
     """
     CLI entry point for 2-D dataset generation.
     """
@@ -118,9 +126,7 @@ def main_2d(argv: List[str] | None = None) -> None:
         seed=args.seed,
         density=args.density,
     )
-    batch = gen.generate_batch(
-        num_problems=args.n, timesteps=args.timesteps, trim_trivial=True
-    )
+    batch = gen.generate_batch(num_problems=args.n, timesteps=args.timesteps, trim_trivial=True)
 
     args.outfile.parent.mkdir(parents=True, exist_ok=True)
     with args.outfile.open("w", encoding="utf-8") as f:
@@ -130,7 +136,7 @@ def main_2d(argv: List[str] | None = None) -> None:
     print(f"Wrote {len(batch):,} 2-D problems to {args.outfile}")
 
 
-def dispatch_main(argv: List[str] | None = None) -> None:
+def dispatch_main(argv: list[str] | None = None) -> None:
     """
     Dispatcher that invokes either the 1-D or 2-D generator based on --mode.
     """

@@ -1,36 +1,79 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "cabench"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Cellular automata benchmark for LLM spatial and working-memory reasoning."
 readme = "README.md"
 requires-python = ">=3.13"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
   { name = "Micah Tracht" }
 ]
 keywords = ["benchmark", "llm", "cellular-automata", "evaluation"]
+classifiers = [
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Operating System :: OS Independent",
+]
 dependencies = [
-  "numpy",
-  "openai>=1.0.0",
-  "pyyaml",
-  "backoff",
-  "python-dotenv",
+  "numpy>=1.26",
+  "openai>=1.0",
+  "pyyaml>=6",
+  "backoff>=2",
+  "python-dotenv>=1",
 ]
 
 [project.optional-dependencies]
 dev = [
   "build",
-  "pytest",
+  "pytest>=8",
+  "pytest-cov",
+  "ruff",
+  "mypy",
+  "pre-commit",
+  "types-PyYAML",
 ]
+
+[project.urls]
+Homepage = "https://github.com/micahtracht/CABench"
+Repository = "https://github.com/micahtracht/CABench"
+Issues = "https://github.com/micahtracht/CABench/issues"
 
 [project.scripts]
 cabench = "cabench.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "cabench.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["cabench*"]
 namespaces = true
+
+[tool.setuptools.package-data]
+cabench = ["py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+# Line length is owned by the formatter; E501 only fires on unwrappable
+# long strings/comments, so we don't lint it.
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+files = ["cabench"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+addopts = "-ra --strict-markers --strict-config"

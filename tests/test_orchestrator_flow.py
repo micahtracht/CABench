@@ -78,7 +78,9 @@ def test_orchestrator_dry_run_skips_runner_and_eval(tmp_path: Path, monkeypatch)
     _write_dataset(dataset_path)
     _write_config(cfg_path, dataset_path, ["m1"])
 
-    monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
+    monkeypatch.setattr(
+        orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False}
+    )
     monkeypatch.setattr(
         orchestrator,
         "run_batch",
@@ -114,11 +116,17 @@ def test_orchestrator_master_usage_dedupes_on_rerun(tmp_path: Path, monkeypatch)
     _write_dataset(dataset_path)
     _write_config(cfg_path, dataset_path, ["m1"])
 
-    monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
+    monkeypatch.setattr(
+        orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False}
+    )
     monkeypatch.setattr(orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.01}))
 
-    orchestrator.run(cfg_path, data_dir=data_dir, log_dir=log_dir, results_dir=results_dir, summarize=False)
-    orchestrator.run(cfg_path, data_dir=data_dir, log_dir=log_dir, results_dir=results_dir, summarize=False)
+    orchestrator.run(
+        cfg_path, data_dir=data_dir, log_dir=log_dir, results_dir=results_dir, summarize=False
+    )
+    orchestrator.run(
+        cfg_path, data_dir=data_dir, log_dir=log_dir, results_dir=results_dir, summarize=False
+    )
 
     with (log_dir / "master_usage.csv").open(newline="", encoding="utf-8") as fp:
         rows = list(csv.reader(fp))
@@ -147,8 +155,12 @@ def test_orchestrator_force_preds_restarts_usage_and_preds(tmp_path: Path, monke
         w.writerow(USAGE_COLUMNS)
         w.writerow(["old", "m1", "1", "1", "2", "0.50000"])
 
-    monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
-    monkeypatch.setattr(orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.01}, assert_fresh=True))
+    monkeypatch.setattr(
+        orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False}
+    )
+    monkeypatch.setattr(
+        orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.01}, assert_fresh=True)
+    )
 
     orchestrator.run(
         cfg_path=cfg_path,
@@ -174,8 +186,12 @@ def test_orchestrator_budget_cap_uses_actual_usage(tmp_path: Path, monkeypatch):
     _write_config(cfg_path, dataset_path, ["m1", "m2"])
 
     monkeypatch.setattr(orchestrator, "HARD_SPEND_CEILING", 0.05)
-    monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
-    monkeypatch.setattr(orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.03, "m2": 0.03}))
+    monkeypatch.setattr(
+        orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False}
+    )
+    monkeypatch.setattr(
+        orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.03, "m2": 0.03})
+    )
 
     with pytest.raises(SpendCapError) as exc:
         orchestrator.run(
@@ -197,7 +213,9 @@ def test_orchestrator_convert_and_eval_integration(tmp_path: Path, monkeypatch):
     _write_dataset(dataset_path, target="00")
     _write_config(cfg_path, dataset_path, ["m1"])
 
-    monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
+    monkeypatch.setattr(
+        orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False}
+    )
     # Only the LLM call is faked; convert + score run for real in-process.
     monkeypatch.setattr(orchestrator, "run_batch", _fake_run_batch_factory({"m1": 0.01}))
 

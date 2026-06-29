@@ -1,7 +1,5 @@
 import types
 
-import pytest
-
 import cabench.llm.runner as runner
 
 
@@ -28,9 +26,7 @@ class _FakeClient:
     def __init__(self, events):
         self._events = list(events)
         self._idx = 0
-        self.chat = types.SimpleNamespace(
-            completions=types.SimpleNamespace(create=self._create)
-        )
+        self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=self._create))
 
     def _create(self, **kwargs):
         event = self._events[self._idx]

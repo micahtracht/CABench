@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-import cabench.orchestrator as orchestrator
 import cabench.llm.runner as runner
+import cabench.orchestrator as orchestrator
 
 
 class _FakeUsage:
@@ -29,9 +29,7 @@ class _FakeResp:
 class _FakeOpenAI:
     def __init__(self, api_key=None):
         self.api_key = api_key
-        self.chat = SimpleNamespace(
-            completions=SimpleNamespace(create=self._create)
-        )
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     def _create(self, **kwargs):
         # Deterministic mocked model output for both 1-D and 2-D tests.
@@ -83,7 +81,9 @@ def test_orchestrator_full_pipeline_with_mocked_openai(tmp_path: Path, monkeypat
     monkeypatch.setattr(runner, "client", None)
     monkeypatch.setattr(runner, "wait_one_second", lambda: None)
     monkeypatch.setattr(runner.time, "sleep", lambda _s: None)
-    monkeypatch.setattr(orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False})
+    monkeypatch.setattr(
+        orchestrator, "get_git_metadata", lambda _root: {"commit": "abc", "dirty": False}
+    )
 
     orchestrator.run(
         cfg_path=cfg_path,

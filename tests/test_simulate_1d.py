@@ -1,24 +1,26 @@
-import pytest
-from cabench.simulate import simulate_2d, step_1d, simulate, step_2d
 from cabench.rules import Rule1D, Rule2D
-from cabench.simulate import _neighbor_sum
+from cabench.simulate import _neighbor_sum, simulate, simulate_2d, step_1d, step_2d
+
 
 def test_step_identity_rule0():
-    rule_0 = Rule1D("000000") # this should make every cell go to 0
+    rule_0 = Rule1D("000000")  # this should make every cell go to 0
     state = [1, 0, 1, 1]
     assert step_1d(state, rule_0) == [0, 0, 0, 0]
+
 
 def test_step_rule_identity():
     r_id = Rule1D("000111")
     state = [0, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0]
     assert step_1d(state, r_id) == state
 
+
 def test_multi_step_consistency():
     r = Rule1D("110001")
     state = [1, 0, 0, 1]
     one = step_1d(state, r)
-    two  = step_1d(one, r)
+    two = step_1d(one, r)
     assert simulate(state, r, 2) == two
+
 
 def test_zero_length_state():
     """Empty lattice should stay empty for any rule / timestep."""
@@ -30,7 +32,7 @@ def test_zero_length_state():
 
 def test_all_dead_state_invariant():
     """With a rule that keeps dead cells dead, an all-zero state is fixed."""
-    rule = Rule1D("000111")               # dead -> dead for all neighbor sums
+    rule = Rule1D("000111")  # dead -> dead for all neighbor sums
     state = [0, 0, 0, 0, 0]
     assert step_1d(state, rule) == state
     assert simulate(state, rule, 4) == state
@@ -38,7 +40,7 @@ def test_all_dead_state_invariant():
 
 def test_all_alive_state_invariant():
     """Rule with alive→alive for all sums keeps an all-one state unchanged."""
-    rule = Rule1D("111111")               # alive -> alive, dead bits irrelevant
+    rule = Rule1D("111111")  # alive -> alive, dead bits irrelevant
     state = [1, 1, 1, 1, 1]
     assert step_1d(state, rule) == state
     assert simulate(state, rule, 3) == state
@@ -60,6 +62,7 @@ def test_neighbor_sum_corners_and_center():
     assert _neighbor_sum(grid, 0, 0) == 1
     # center (1,1) → two live neighbors (0,0) and (2,2)
     assert _neighbor_sum(grid, 1, 1) == 2
+
 
 def test_step2d_all_zero_rule():
     """A rule of all zeros should wipe the grid in one step."""

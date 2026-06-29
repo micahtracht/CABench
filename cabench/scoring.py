@@ -4,9 +4,10 @@ import argparse
 import json
 import pathlib
 import sys
-from typing import List, Sequence, Union
+from collections.abc import Sequence
 
-def _flatten(obj: Union[str, Sequence]) -> str:
+
+def _flatten(obj: str | Sequence) -> str:
     """
     Convert the target—whether a binary string, a 1-D list, or a 2-D nested
     list—into a flat binary string (row-major order).  Raises ValueError on
@@ -16,13 +17,15 @@ def _flatten(obj: Union[str, Sequence]) -> str:
         flat = obj
     elif isinstance(obj, Sequence):
         # recurse over arbitrary depth; collect scalars
-        bits: List[str] = []
+        bits: list[str] = []
+
         def _collect(x):
             if isinstance(x, Sequence) and not isinstance(x, (str, bytes)):
                 for y in x:
                     _collect(y)
             else:
                 bits.append(str(x))
+
         _collect(obj)
         flat = "".join(bits)
     else:
@@ -32,17 +35,20 @@ def _flatten(obj: Union[str, Sequence]) -> str:
         raise ValueError("non-binary symbol found")
     return flat
 
+
 def normalized_hamming_accuracy(correct: str, response: str) -> float:
-    '''
+    """
     1.0 means perfect match, 0.0 means nothing was correct. Lower = proportion of mismatches."
-    '''
+    """
     if not correct:
         return 0.0
-    
-    hamming_distance = sum(c != r for c, r in zip(correct, response))
-    hamming_distance += abs(len(correct) - len(response)) # responses too long or too short have all excess/nonexistent characters counted as incorrect
-    
-    return 1.0 - (hamming_distance/max(len(correct), len(response))) # in [0, 1]
+
+    hamming_distance = sum(c != r for c, r in zip(correct, response, strict=False))
+    hamming_distance += abs(
+        len(correct) - len(response)
+    )  # responses too long or too short have all excess/nonexistent characters counted as incorrect
+
+    return 1.0 - (hamming_distance / max(len(correct), len(response)))  # in [0, 1]
 
 
 class EvalError(ValueError):
@@ -60,9 +66,7 @@ def score(gold_path: pathlib.Path, pred_path: pathlib.Path) -> dict:
     pred_lines = pred_path.read_text(encoding="utf-8").splitlines()
 
     if len(gold_lines) != len(pred_lines):
-        raise EvalError(
-            f"Mismatch: {len(pred_lines)} predictions vs {len(gold_lines)} gold."
-        )
+        raise EvalError(f"Mismatch: {len(pred_lines)} predictions vs {len(gold_lines)} gold.")
 
     total = len(gold_lines)
     if total == 0:
@@ -72,7 +76,7 @@ def score(gold_path: pathlib.Path, pred_path: pathlib.Path) -> dict:
     exact_match = 0
     invalid = 0
 
-    for idx, (gline, pred_raw) in enumerate(zip(gold_lines, pred_lines), 1):
+    for idx, (gline, pred_raw) in enumerate(zip(gold_lines, pred_lines, strict=False), 1):
         try:
             correct_obj = json.loads(gline)["target"]
         except (json.JSONDecodeError, KeyError, TypeError) as e:
@@ -85,13 +89,13 @@ def score(gold_path: pathlib.Path, pred_path: pathlib.Path) -> dict:
         pred_str = pred_raw.strip()
         if pred_str == "":
             invalid += 1
-            pred_flat = ""                             # blank/missing prediction
+            pred_flat = ""  # blank/missing prediction
         else:
             try:
-                pred_flat = _flatten(pred_str)         # pred already string
+                pred_flat = _flatten(pred_str)  # pred already string
             except ValueError:
                 invalid += 1
-                pred_flat = ""                         # treat as fully wrong
+                pred_flat = ""  # treat as fully wrong
 
         acc = normalized_hamming_accuracy(gold_flat, pred_flat)
         sum_acc += acc
@@ -128,16 +132,21 @@ def evaluate(gold_path: pathlib.Path, pred_path: pathlib.Path) -> None:
     )
     sys.exit(0)
 
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Score CA predictions (1-D or 2-D) against a gold JSONL."
     )
-    p.add_argument("--gold", type=pathlib.Path, required=True, help="Gold JSONL with a 'target' field.")
-    p.add_argument("--pred", type=pathlib.Path, required=True, help="Predictions file (one line per case).")
+    p.add_argument(
+        "--gold", type=pathlib.Path, required=True, help="Gold JSONL with a 'target' field."
+    )
+    p.add_argument(
+        "--pred", type=pathlib.Path, required=True, help="Predictions file (one line per case)."
+    )
     return p
 
 
-def main(argv: List[str] | None = None) -> None:
+def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
     evaluate(args.gold, args.pred)
 

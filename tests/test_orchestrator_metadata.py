@@ -2,6 +2,8 @@ import json
 from pathlib import Path
 
 import cabench.orchestrator as orchestrator
+
+
 def test_file_sha256_is_stable(tmp_path: Path):
     p = tmp_path / "x.txt"
     p.write_text("hello\n", encoding="utf-8")
