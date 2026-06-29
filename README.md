@@ -80,8 +80,8 @@ Expected artifacts:
 ```bash
 python -m cabench run \
   --config bench.yaml \
-  --models gpt-4.1-mini,gpt-4.1 \
-  --datasets quick1d_32,quick2d_16x16 \
+  --models gpt-5.4-mini,gpt-5.4 \
+  --datasets bench1d_32,bench2d_32x32 \
   --dim 1 \
   --numquestions 128 \
   --data-dir out/data \
@@ -90,6 +90,7 @@ python -m cabench run \
 ```
 
 Useful flags:
+- `--preset <name>`: run a named preset from `bench.yaml` (e.g. `quick`, `presentation`)
 - `--model-id <id>`: run one model
 - `--models a,b,c`: run multiple models
 - `--datasets a,b,c`: run selected datasets
@@ -98,28 +99,30 @@ Useful flags:
 - `--new`: force dataset regeneration
 - `--force-preds`: reset existing prediction/usage files for fresh run
 - `--dry-run`: skip API calls and API-dependent postprocessing (conversion/eval); writes dry-run markers
+- `--spend-cap <usd>`: cap total actual spend for the run (default $1.00)
 - `--data-dir`, `--log-dir`, `--results-dir`: custom output roots
 - `--no-summary`: disable end-of-run summary table
+- `--no-report`: skip writing the end-of-run report
 
 ## Bench.yaml cheat sheet
 ```yaml
 datasets:
-  - name: quick1d_32
+  - name: bench1d_32
     gen:                 # auto-generate if file absent
       mode: 1d
-      n: 256             # number of tasks
+      n: 128             # number of tasks
       size: 32           # 1-D length
       timesteps: 4
-      density: 0.4
+      density: 0.5
       seed: 123
-    path: data/quick1d_32.jsonl
+    path: data/bench1d_32.jsonl
     dim: 1               # picks the 1-D wrapper
 
 models:
-  - id: gpt-4.1-mini
+  - id: gpt-5.4-mini
     provider: openai
     max_calls_per_min: 60
-    price_per_1k_tokens: 0.001
+    price_per_1k_tokens: 0.002625  # blended 50/50 input+output estimate
     temperature: 0
 ```
 
@@ -127,7 +130,7 @@ models:
 
 - Fast smoke test (no API):
 ```bash
-python -m cabench run --dry-run --numquestions 8 --models gpt-4.1-mini
+python -m cabench run --dry-run --numquestions 8 --models gpt-5.4-mini
 ```
 
 - Run only 2D datasets:
@@ -137,7 +140,7 @@ python -m cabench run --dim 2
 
 - Run one model on one dataset:
 ```bash
-python -m cabench run --model-id gpt-4.1-mini --datasets quick1d_32
+python -m cabench run --model-id gpt-5.4-mini --datasets bench1d_32
 ```
 
 - Keep outputs separate per experiment:
@@ -152,6 +155,13 @@ Generate comparison tables from accumulated scores:
 ```bash
 python -m cabench report --scores results/scores.csv --out results/report.txt
 ```
+
+Report flags:
+- `--results-dir <dir>`: results root the other paths derive from (default `results/`)
+- `--scores <path>`: scores CSV to read (default `<results-dir>/scores.csv`)
+- `--metadata <path>`: run-metadata JSONL to enrich the report (default `<results-dir>/run_metadata.jsonl`)
+- `--latest-only`: show only the latest invocation summary
+- `--out <path>`: optional path to write the rendered report
 
 Report includes:
 - per-model aggregate ranking (`avg_norm_hamming`, `avg_exact_pct`, `total_cost_usd`)

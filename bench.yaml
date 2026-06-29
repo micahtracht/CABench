@@ -26,23 +26,26 @@ datasets:
     path: data/bench2d_32x32.jsonl
     dim: 2
 
+# price_per_1k_tokens is a single blended rate applied to total (prompt + completion)
+# tokens. It is a 50/50 input+output approximation of OpenAI list prices; true cost
+# needs an input/output split (a usage-ledger schema change, deferred).
 models:
-  - id: gpt-4.1-nano
+  - id: gpt-5.4-nano
     provider: openai
     max_calls_per_min: 120
-    price_per_1k_tokens: 0.003
+    price_per_1k_tokens: 0.000725
     temperature: 0
 
-  - id: gpt-4.1
+  - id: gpt-5.4
     provider: openai
     max_calls_per_min: 60
-    price_per_1k_tokens: 0.048
+    price_per_1k_tokens: 0.00875
     temperature: 0
 
-  - id: gpt-4.1-mini
+  - id: gpt-5.4-mini
     provider: openai
     max_calls_per_min: 60
-    price_per_1k_tokens: 0.012
+    price_per_1k_tokens: 0.002625
     temperature: 0
 
 presets:
@@ -52,7 +55,7 @@ presets:
       - bench1d_32
       - bench2d_32x32
     models:
-      - gpt-4.1-nano
+      - gpt-5.4-nano
 
   - name: presentation
     description: Cross-check both benchmark datasets with the cheaper presentation-friendly models.
@@ -60,5 +63,5 @@ presets:
       - bench1d_32
       - bench2d_32x32
     models:
-      - gpt-4.1-nano
-      - gpt-4.1-mini
+      - gpt-5.4-nano
+      - gpt-5.4-mini

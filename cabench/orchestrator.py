@@ -12,7 +12,7 @@ Run CA-Bench end-to-end:
     - evaluate (cabench.scoring)
     - append metrics & cost to results/scores.csv
     - merge per-call usage into logs/master_usage.csv
-2. Enforce a hard $5.00 USD ceiling on actual spend
+2. Enforce a hard $1.00 USD ceiling on actual spend
 3. In --dry-run mode, skip API calls and API-dependent postprocessing
    (conversion/evaluation), and write explicit dry-run markers.
 """
@@ -340,10 +340,7 @@ def run(
 
                 model_id_run = mdl["id"]
                 price_per_1k = mdl["price_per_1k_tokens"]
-                if model_id_run == "gpt-4.1-nano":
-                    max_calls = 250
-                else:
-                    max_calls = mdl.get("max_calls_per_min", 60)
+                max_calls = mdl.get("max_calls_per_min", 60)
                 run_started = now_utc_iso()
 
                 if dry_run:
@@ -656,7 +653,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--models",
-        help="Comma-separated model IDs to run (e.g. gpt-4.1-mini,gpt-4.1).",
+        help="Comma-separated model IDs to run (e.g. gpt-5.4-mini,gpt-5.4).",
     )
     parser.add_argument(
         "--datasets",

@@ -49,7 +49,7 @@ _hard_cap_env = os.getenv("CABENCH_HARD_CAP", "1.0")
 try:
     DEFAULT_HARD_CAP_USD = float(_hard_cap_env)
 except ValueError:
-    DEFAULT_HARD_CAP_USD = 5.0
+    DEFAULT_HARD_CAP_USD = 1.0
 
 # Module-level OpenAI client; set lazily by run_batch for live runs and
 # monkeypatched directly in tests.
