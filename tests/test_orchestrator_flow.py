@@ -204,6 +204,39 @@ def test_orchestrator_budget_cap_uses_actual_usage(tmp_path: Path, monkeypatch):
     assert "exceeded hard ceiling" in str(exc.value)
 
 
+def test_orchestrator_no_datasets_matching_dim_returns(tmp_path: Path, capsys):
+    dataset_path = tmp_path / "gold.jsonl"
+    cfg_path = tmp_path / "bench.yaml"
+    _write_dataset(dataset_path)
+    _write_config(cfg_path, dataset_path, ["m1"])  # all datasets are dim 1
+
+    orchestrator.run(
+        cfg_path=cfg_path,
+        dim=2,  # no dim-2 datasets -> early return
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        results_dir=tmp_path / "results",
+        summarize=False,
+    )
+    assert "No datasets matching dimension 2" in capsys.readouterr().err
+
+
+def test_orchestrator_missing_dataset_file_is_skipped(tmp_path: Path, capsys):
+    cfg_path = tmp_path / "bench.yaml"
+    # dataset path points at a file that does not exist and has no gen block
+    _write_config(cfg_path, tmp_path / "absent.jsonl", ["m1"])
+
+    orchestrator.run(
+        cfg_path=cfg_path,
+        dry_run=True,
+        data_dir=tmp_path / "data",
+        log_dir=tmp_path / "logs",
+        results_dir=tmp_path / "results",
+        summarize=False,
+    )
+    assert "Dataset not found" in capsys.readouterr().err
+
+
 def test_orchestrator_convert_and_eval_integration(tmp_path: Path, monkeypatch):
     dataset_path = tmp_path / "gold.jsonl"
     cfg_path = tmp_path / "bench.yaml"

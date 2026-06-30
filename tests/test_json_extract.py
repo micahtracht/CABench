@@ -46,3 +46,22 @@ def test_extract_falls_back_to_last_dict_without_answer_key():
     # No object carries an answer key -> return the last decodable dict.
     s = '{"a":1}\n{"b":2}'
     assert extract_answer_json(s) == {"b": 2}
+
+
+def test_extract_empty_string_is_none():
+    assert extract_answer_json("") is None
+
+
+def test_extract_whitespace_only_is_none():
+    assert extract_answer_json("   \n\t ") is None
+
+
+def test_extract_unparseable_fence_falls_through():
+    # Looks like a fence but the body isn't JSON -> fence path fails, scan finds nothing.
+    assert extract_answer_json("```\nnot json here\n```") is None
+
+
+def test_extract_skips_invalid_brace_then_finds_object():
+    # A stray '{' that doesn't start valid JSON must be skipped by the scanner.
+    s = '{ this is not json\nthen later: {"answer":[1]}'
+    assert extract_answer_json(s) == {"answer": [1]}

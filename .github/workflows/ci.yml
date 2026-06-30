@@ -43,7 +43,7 @@ jobs:
         run: mypy cabench
 
       - name: Run test suite with coverage
-        run: pytest --cov=cabench --cov-report=term-missing --cov-fail-under=75
+        run: pytest --cov=cabench --cov-report=term-missing --cov-fail-under=90
 
       - name: Dry-run smoke + generate report
         run: |

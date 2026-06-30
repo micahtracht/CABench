@@ -33,3 +33,11 @@ def test_read_usage_csv_invalid_usd_exits(tmp_path: Path):
 
     with pytest.raises(OrchestratorError):
         read_usage_csv(path)
+
+
+def test_read_usage_csv_missing_usd_column_raises(tmp_path: Path):
+    path = tmp_path / "usage.csv"
+    with path.open("w", newline="", encoding="utf-8") as fp:
+        csv.writer(fp).writerow(["ts", "model", "prompt_tok", "completion_tok", "total_tok"])
+    with pytest.raises(OrchestratorError, match="missing 'usd'"):
+        read_usage_csv(path)
