@@ -12,7 +12,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Python 3.13+ is required.
+Python 3.14+ is required.
 
 ## Before you push
 

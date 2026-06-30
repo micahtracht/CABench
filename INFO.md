@@ -105,7 +105,7 @@ start is all-dead/all-alive, or if it evolves back to the start after `timesteps
 `--no-summary`, `--no-report`.
 
 ## Environment & Dependencies
-- Python target: 3.13 (`pyproject.toml` requires `>=3.13`; CI runs 3.13)
+- Python target: 3.14 (`pyproject.toml` requires `>=3.14`; CI runs 3.14)
 - Runtime deps (`requirements.txt` / `pyproject.toml`): `numpy`, `openai`, `pyyaml`,
   `backoff`, `python-dotenv`; `pytest` for tests
 - `.env` is auto-loaded if present (never overrides already-exported vars);

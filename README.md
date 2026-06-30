@@ -2,7 +2,7 @@
 *A lightweight benchmark for spatial reasoning in LLMs using 1D and 2D cellular automata.*
 
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Python](https://img.shields.io/badge/Python-3.13-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.14-blue.svg)
 
 ---
 

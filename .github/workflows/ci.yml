@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13", "3.14"]
+        python-version: ["3.14"]
 
     steps:
       - name: Check out code
@@ -61,7 +61,7 @@ jobs:
             --out ci_artifacts/results/report.txt
 
       - name: Upload CI report artifacts
-        if: matrix.python-version == '3.13'
+        if: matrix.python-version == '3.14'
         uses: actions/upload-artifact@v4
         with:
           name: cabench-ci-artifacts

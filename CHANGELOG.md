@@ -19,8 +19,9 @@ All notable changes to this project are documented here. The format is based on
 - Orchestration runs fully in-process; the 1D/2D model runners are unified behind one
   `run_batch(dim=...)`; the CA generators and rule classes share a common base.
 - Library errors raise typed exceptions caught at the CLI boundary instead of calling
-  `sys.exit`; CI installs the package and runs lint/format/type/coverage across
-  Python 3.13 and 3.14.
+  `sys.exit`; CI installs the package and runs lint/format/type/coverage.
+- Raised the minimum Python to **3.14** (`requires-python = ">=3.14"`); tooling, CI, and
+  docs target 3.14.
 
 ### Fixed
 - Answer extraction prefers the last answer-bearing JSON object (matches the prompt

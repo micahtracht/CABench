@@ -7,7 +7,7 @@ name = "cabench"
 dynamic = ["version"]
 description = "Cellular automata benchmark for LLM spatial and working-memory reasoning."
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [
@@ -15,7 +15,6 @@ authors = [
 ]
 keywords = ["benchmark", "llm", "cellular-automata", "evaluation"]
 classifiers = [
-  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Intended Audience :: Science/Research",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -61,7 +60,7 @@ cabench = ["py.typed"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]
@@ -70,7 +69,7 @@ select = ["E", "F", "I", "UP", "B", "W"]
 ignore = ["E501"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 ignore_missing_imports = true
 files = ["cabench"]
 
